@@ -9,14 +9,13 @@ use std::{
 use crate::task::{ScheduleTask, Task, TaskId};
 
 /// Struct to hold every task scheduled.
+#[derive(Default)]
 pub struct Scheduler {
     pub tasks: HashMap<TaskId, Task>,
 }
 impl Scheduler {
     pub fn new() -> Self {
-        Self {
-            tasks: HashMap::new(),
-        }
+        Self::default()
     }
 
     /// Start a task and schedule it to run periodically.
