@@ -131,3 +131,182 @@ impl Scheduler {
         task.state.store(true, Ordering::Relaxed);
     }
 }
+
+#[cfg(test)]
+mod test {
+    use std::{
+        sync::{Arc, RwLock},
+        time::Duration,
+    };
+
+    use crate::prelude::*;
+
+    #[tokio::test]
+    async fn start_and_stop_task() {
+        struct TestTask {
+            state: Arc<RwLock<u32>>,
+        }
+        impl UniqueId for TestTask {}
+        impl ScheduleTask for TestTask {
+            async fn run(&self) {
+                let mut state = self.state.write().unwrap();
+                *state += 1;
+            }
+
+            fn recurrence() -> Duration {
+                Duration::from_secs(1)
+            }
+        }
+
+        let mut scheduler = Scheduler::new();
+        let value = Arc::new(RwLock::new(0));
+        let task = TestTask {
+            state: value.clone(),
+        };
+        scheduler.start(task);
+        tokio::time::sleep(Duration::from_secs(2)).await;
+        scheduler.stop(TestTask::get_unique_id());
+        assert_eq!(*value.read().unwrap(), 2);
+    }
+
+    #[tokio::test]
+    async fn start_2secs_pause_2secs_resume_2secs_stop_task() {
+        struct TestTask {
+            state: Arc<RwLock<u32>>,
+        }
+        impl UniqueId for TestTask {}
+        impl ScheduleTask for TestTask {
+            async fn run(&self) {
+                let mut state = self.state.write().unwrap();
+                *state += 1;
+            }
+
+            fn recurrence() -> Duration {
+                Duration::from_secs(1)
+            }
+        }
+
+        let mut scheduler = Scheduler::new();
+        let value = Arc::new(RwLock::new(0));
+        let task = TestTask {
+            state: value.clone(),
+        };
+        scheduler.start(task);
+        tokio::time::sleep(Duration::from_secs(2)).await;
+        scheduler.pause(TestTask::get_unique_id());
+        tokio::time::sleep(Duration::from_secs(2)).await;
+        assert_eq!(*value.read().unwrap(), 2);
+        scheduler.resume(TestTask::get_unique_id());
+        tokio::time::sleep(Duration::from_secs(2)).await;
+        scheduler.stop(TestTask::get_unique_id());
+        assert_eq!(*value.read().unwrap(), 4);
+    }
+
+    #[tokio::test]
+    async fn start_and_stop_multiple_tasks() {
+        struct FirstTask {
+            state: Arc<RwLock<u32>>,
+        }
+        impl UniqueId for FirstTask {}
+        impl ScheduleTask for FirstTask {
+            async fn run(&self) {
+                let mut state = self.state.write().unwrap();
+                *state += 1;
+            }
+
+            fn recurrence() -> Duration {
+                Duration::from_secs(1)
+            }
+        }
+
+        struct SecondTask {
+            state: Arc<RwLock<u32>>,
+        }
+        impl UniqueId for SecondTask {}
+        impl ScheduleTask for SecondTask {
+            async fn run(&self) {
+                let mut state = self.state.write().unwrap();
+                *state += 1;
+            }
+
+            fn recurrence() -> Duration {
+                Duration::from_secs(2)
+            }
+        }
+
+        let mut scheduler = Scheduler::new();
+        let first_value = Arc::new(RwLock::new(0));
+        let first_task = FirstTask {
+            state: first_value.clone(),
+        };
+        let second_value = Arc::new(RwLock::new(0));
+        let second_task = SecondTask {
+            state: second_value.clone(),
+        };
+        scheduler.start(first_task);
+        scheduler.start(second_task);
+        tokio::time::sleep(Duration::from_secs(5)).await;
+        scheduler.stop(FirstTask::get_unique_id());
+        scheduler.stop(SecondTask::get_unique_id());
+        assert_eq!(*first_value.read().unwrap(), 5);
+        assert_eq!(*second_value.read().unwrap(), 3);
+    }
+
+    #[tokio::test]
+    async fn start_2secs_pause_2secs_resume_2secs_stop_multiple_tasks() {
+        struct FirstTask {
+            state: Arc<RwLock<u32>>,
+        }
+        impl UniqueId for FirstTask {}
+        impl ScheduleTask for FirstTask {
+            async fn run(&self) {
+                let mut state = self.state.write().unwrap();
+                *state += 1;
+            }
+
+            fn recurrence() -> Duration {
+                Duration::from_secs(1)
+            }
+        }
+
+        struct SecondTask {
+            state: Arc<RwLock<u32>>,
+        }
+        impl UniqueId for SecondTask {}
+        impl ScheduleTask for SecondTask {
+            async fn run(&self) {
+                let mut state = self.state.write().unwrap();
+                *state += 1;
+            }
+
+            fn recurrence() -> Duration {
+                Duration::from_secs(2)
+            }
+        }
+
+        let mut scheduler = Scheduler::new();
+        let first_value = Arc::new(RwLock::new(0));
+        let first_task = FirstTask {
+            state: first_value.clone(),
+        };
+        let second_value = Arc::new(RwLock::new(0));
+        let second_task = SecondTask {
+            state: second_value.clone(),
+        };
+        scheduler.start(first_task);
+        scheduler.start(second_task);
+        tokio::time::sleep(Duration::from_secs(2)).await;
+        scheduler.pause(FirstTask::get_unique_id());
+        scheduler.pause(SecondTask::get_unique_id());
+        tokio::time::sleep(Duration::from_secs(2)).await;
+        assert_eq!(*first_value.read().unwrap(), 2);
+        assert_eq!(*second_value.read().unwrap(), 1);
+        scheduler.resume(FirstTask::get_unique_id());
+        scheduler.resume(SecondTask::get_unique_id());
+        tokio::time::sleep(Duration::from_secs(2)).await;
+        scheduler.stop(FirstTask::get_unique_id());
+        scheduler.stop(SecondTask::get_unique_id());
+        assert_eq!(*first_value.read().unwrap(), 4);
+        assert_eq!(*second_value.read().unwrap(), 2);
+    }
+}
