@@ -5,7 +5,7 @@ use std::{
     hash::{DefaultHasher, Hash, Hasher},
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc,
+        Arc, RwLock,
     },
     time::Duration,
 };
@@ -30,16 +30,32 @@ where
             return;
         }
         let state = Arc::new(AtomicBool::new(true));
-        let recurrence = Arc::new(recurrence);
+        let recurrence = Arc::new(RwLock::new(recurrence));
         let handler = {
             let state = state.clone();
             let recurrence = recurrence.clone();
             tokio::spawn(async move {
                 loop {
+                    {
+                        let mut recurrence = recurrence.write().unwrap();
+                        match recurrence.count {
+                            None => {}
+                            Some(count) if count == 0 => break,
+                            Some(count) => {
+                                recurrence.count = Some(count - 1);
+                            }
+                        }
+                    }
                     if state.load(Ordering::Relaxed) {
                         task.run().await;
                     }
-                    let _ = tokio::time::sleep(recurrence.unit.into()).await;
+                    {
+                        let duration = {
+                            let read_guard = recurrence.read().unwrap();
+                            read_guard.unit
+                        };
+                        let _ = tokio::time::sleep(duration.into()).await;
+                    }
                 }
             })
         };
@@ -113,16 +129,32 @@ where
             return;
         }
         let state = Arc::new(AtomicBool::new(true));
-        let recurrence = Arc::new(recurrence);
+        let recurrence = Arc::new(RwLock::new(recurrence));
         let handler = {
             let state = state.clone();
             let recurrence = recurrence.clone();
             tokio::spawn(async move {
                 loop {
+                    {
+                        let mut recurrence = recurrence.write().unwrap();
+                        match recurrence.count {
+                            None => {}
+                            Some(count) if count == 0 => break,
+                            Some(count) => {
+                                recurrence.count = Some(count - 1);
+                            }
+                        }
+                    }
                     if state.load(Ordering::Relaxed) {
                         task.run();
                     }
-                    let _ = tokio::time::sleep(recurrence.unit.into()).await;
+                    {
+                        let duration = {
+                            let read_guard = recurrence.read().unwrap();
+                            read_guard.unit
+                        };
+                        let _ = tokio::time::sleep(duration.into()).await;
+                    }
                 }
             })
         };
@@ -214,7 +246,7 @@ pub struct AsyncTask {
     pub id: TaskId,
     pub state: Arc<AtomicBool>,
     pub handler: tokio::task::JoinHandle<()>,
-    pub recurrence: Arc<Recurrence>,
+    pub recurrence: Arc<RwLock<Recurrence>>,
 }
 impl std::fmt::Debug for AsyncTask {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -229,7 +261,7 @@ pub struct SyncTask {
     pub id: TaskId,
     pub state: Arc<AtomicBool>,
     pub handler: tokio::task::JoinHandle<()>,
-    pub recurrence: Arc<Recurrence>,
+    pub recurrence: Arc<RwLock<Recurrence>>,
 }
 impl std::fmt::Debug for SyncTask {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -362,25 +394,25 @@ mod test {
         //scheduler.resume(MySyncTask::unique_id());
         //scheduler.abort(MySyncTask::unique_id());
 
-        <HashMap<u64, SyncTask> as TaskScheduler<MySyncTask>>::pause(
-            &mut scheduler,
-            MySyncTask::unique_id(),
-        );
-        <HashMap<u64, SyncTask> as TaskScheduler<MySyncTask>>::resume(
-            &mut scheduler,
-            MySyncTask::unique_id(),
-        );
-        <HashMap<u64, SyncTask> as TaskScheduler<MySyncTask>>::abort(
-            &mut scheduler,
-            MySyncTask::unique_id(),
-        );
+        //<HashMap<u64, SyncTask> as TaskScheduler<MySyncTask>>::pause(
+        //    &mut scheduler,
+        //    MySyncTask::unique_id(),
+        //);
+        //<HashMap<u64, SyncTask> as TaskScheduler<MySyncTask>>::resume(
+        //    &mut scheduler,
+        //    MySyncTask::unique_id(),
+        //);
+        //<HashMap<u64, SyncTask> as TaskScheduler<MySyncTask>>::abort(
+        //    &mut scheduler,
+        //    MySyncTask::unique_id(),
+        //);
         eprintln!("SYNC scheduler = {:?}", scheduler);
         tokio::time::sleep(Duration::from_secs(3)).await;
         eprintln!("State = {:?}", *state.read().unwrap());
         assert_eq!(*state.read().unwrap(), 4);
 
         // Async Task
-        let mut scheduler = Scheduler::<AsyncTask>::new();
+        let mut scheduler: Scheduler<AsyncTask> = Scheduler::<AsyncTask>::new();
         #[derive(Clone)]
         struct MyAsyncTask {
             state: Arc<RwLock<u8>>,
@@ -400,32 +432,52 @@ mod test {
 
         // Run the task once
         scheduler.run(task.clone());
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        eprintln!("State = {:?}", *state.read().unwrap());
+        assert_eq!(*state.read().unwrap(), 1);
         // Run the task every second
         scheduler.schedule(task.clone(), every(1.seconds()));
+        tokio::time::sleep(Duration::from_secs(5)).await;
+        <HashMap<u64, AsyncTask> as TaskScheduler<MyAsyncTask>>::abort(
+            &mut scheduler,
+            MyAsyncTask::unique_id(),
+        );
+        eprintln!("State = {:?}", *state.read().unwrap());
+        assert_eq!(*state.read().unwrap(), 6);
         // Run the task every 3 seconds, 3 times
         scheduler.schedule(task.clone(), every(3.seconds()).count(3));
+        tokio::time::sleep(Duration::from_secs(10)).await;
+        <HashMap<u64, AsyncTask> as TaskScheduler<MyAsyncTask>>::abort(
+            &mut scheduler,
+            MyAsyncTask::unique_id(),
+        );
+        eprintln!("State = {:?}", *state.read().unwrap());
+        assert_eq!(*state.read().unwrap(), 9);
         // Run the task every 1 minute and 2 seconds
-        scheduler.schedule(task, every(1.minutes()).and(2.seconds()));
-        //scheduler.pause(MyAsyncTask::unique_id());
+        scheduler.schedule(task, every(1.minutes()).and(2.seconds()).count(1));
+        tokio::time::sleep(Duration::from_secs(120)).await;
+        <HashMap<u64, AsyncTask> as TaskScheduler<MyAsyncTask>>::abort(
+            &mut scheduler,
+            MyAsyncTask::unique_id(),
+        );
+        eprintln!("State = {:?}", *state.read().unwrap());
+        assert_eq!(*state.read().unwrap(), 10);
+        scheduler.pause(MyAsyncTask::unique_id());
         //scheduler.resume(MyAsyncTask::unique_id());
         //scheduler.abort(MyAsyncTask::unique_id());
 
-        <HashMap<u64, AsyncTask> as TaskScheduler<MyAsyncTask>>::pause(
-            &mut scheduler,
-            MySyncTask::unique_id(),
-        );
-        <HashMap<u64, AsyncTask> as TaskScheduler<MyAsyncTask>>::resume(
-            &mut scheduler,
-            MySyncTask::unique_id(),
-        );
-        <HashMap<u64, AsyncTask> as TaskScheduler<MyAsyncTask>>::abort(
-            &mut scheduler,
-            MySyncTask::unique_id(),
-        );
-        eprintln!("ASYNC scheduler = {:?}", scheduler);
-        tokio::time::sleep(Duration::from_secs(3)).await;
-        eprintln!("State = {:?}", *state.read().unwrap());
-        assert_eq!(*state.read().unwrap(), 4);
+        //<HashMap<u64, AsyncTask> as TaskScheduler<MyAsyncTask>>::pause(
+        //    &mut scheduler,
+        //    MySyncTask::unique_id(),
+        //);
+        //<HashMap<u64, AsyncTask> as TaskScheduler<MyAsyncTask>>::resume(
+        //    &mut scheduler,
+        //    MySyncTask::unique_id(),
+        //);
+        //<HashMap<u64, AsyncTask> as TaskScheduler<MyAsyncTask>>::abort(
+        //    &mut scheduler,
+        //    MyAsyncTask::unique_id(),
+        //);
         assert!(false);
         Ok(())
     }
