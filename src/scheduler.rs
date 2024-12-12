@@ -12,29 +12,40 @@ use std::{
 
 pub type TaskId = u64;
 
-pub type Scheduler = HashMap<TaskId, SyncTask>;
-pub type AsyncScheduler = HashMap<TaskId, AsyncTask>;
+//pub type Scheduler<T: SyncTaskHandler> = HashMap<TaskId, SyncTask>;
+//pub type AsyncScheduler<T: AsyncTaskHandler> = HashMap<TaskId, AsyncTask>;
+pub struct Scheduler<T: SyncTaskHandler> {
+    tasks: HashMap<TaskId, SyncTask>,
+    _phantom: std::marker::PhantomData<T>,
+}
+pub struct AsyncScheduler<T: AsyncTaskHandler> {
+    tasks: HashMap<TaskId, AsyncTask>,
+    _phantom: std::marker::PhantomData<T>,
+}
 
-pub trait TaskScheduler<T: Task> {
+pub trait TaskScheduler<T> {
     fn new() -> Self;
     fn schedule(&mut self, task: T, recurrence: Recurrence);
-    fn pause<U: Task>(&mut self);
-    fn resume<U: Task>(&mut self);
-    fn abort<U: Task>(&mut self);
+    fn pause<U: UniqueId>(&mut self);
+    fn resume<U: UniqueId>(&mut self);
+    fn abort<U: UniqueId>(&mut self);
     fn run(&self, task: T);
 }
 
-impl<T> TaskScheduler<T> for AsyncScheduler
+impl<T: AsyncTaskHandler> TaskScheduler<T> for AsyncScheduler<T>
 where
     T: Task + AsyncTaskHandler + Send + Sync + 'static,
 {
     fn new() -> Self {
-        HashMap::new()
+        Self {
+            tasks: HashMap::new(),
+            _phantom: std::marker::PhantomData,
+        }
     }
 
     fn schedule(&mut self, task: T, recurrence: Recurrence) {
         let id = T::unique_id();
-        if self.contains_key(&id) {
+        if self.tasks.contains_key(&id) {
             eprintln!("Task ({id}): already exists");
             tracing::info!("Task ({id}): already exists");
             return;
@@ -75,13 +86,13 @@ where
             handler,
             recurrence,
         };
-        self.insert(task.id, task);
+        self.tasks.insert(task.id, task);
     }
 
-    fn pause<U: Task>(&mut self) {
+    fn pause<U: UniqueId>(&mut self) {
         // Pause the task
         let id = U::unique_id();
-        let Some(task) = self.get_mut(&U::unique_id()) else {
+        let Some(task) = self.tasks.get_mut(&U::unique_id()) else {
             eprintln!("Task ({id}): not found");
             tracing::info!("Task ({id}): not found");
             return;
@@ -94,10 +105,10 @@ where
         task.state.store(false, Ordering::Relaxed);
     }
 
-    fn resume<U: Task>(&mut self) {
+    fn resume<U: UniqueId>(&mut self) {
         // Resume the task
         let id = U::unique_id();
-        let Some(task) = self.get_mut(&T::unique_id()) else {
+        let Some(task) = self.tasks.get_mut(&T::unique_id()) else {
             eprintln!("Task ({id}): not found");
             tracing::info!("Task ({id}): not found");
             return;
@@ -110,10 +121,10 @@ where
         task.state.store(true, Ordering::Relaxed);
     }
 
-    fn abort<U: Task>(&mut self) {
+    fn abort<U: UniqueId>(&mut self) {
         // Abort the task
         let id = U::unique_id();
-        let Some(task) = self.remove(&id) else {
+        let Some(task) = self.tasks.remove(&id) else {
             eprintln!("Task ({id}): not found");
             tracing::info!("Task ({id}): not found");
             return;
@@ -126,17 +137,20 @@ where
         tokio::spawn(async move { task.run().await });
     }
 }
-impl<T> TaskScheduler<T> for Scheduler
+impl<T: SyncTaskHandler> TaskScheduler<T> for Scheduler<T>
 where
     T: Task + SyncTaskHandler + Send + Sync + 'static,
 {
     fn new() -> Self {
-        HashMap::new()
+        Self {
+            tasks: HashMap::new(),
+            _phantom: std::marker::PhantomData,
+        }
     }
 
     fn schedule(&mut self, task: T, recurrence: Recurrence) {
         let id = T::unique_id();
-        if self.contains_key(&id) {
+        if self.tasks.contains_key(&id) {
             eprintln!("Task ({id}): already exists");
             tracing::info!("Task ({id}): already exists");
             return;
@@ -177,13 +191,13 @@ where
             handler,
             recurrence,
         };
-        self.insert(task.id, task);
+        self.tasks.insert(task.id, task);
     }
 
-    fn pause<U: Task>(&mut self) {
+    fn pause<U: UniqueId>(&mut self) {
         // Pause the task
         let id = U::unique_id();
-        let Some(task) = self.get_mut(&id) else {
+        let Some(task) = self.tasks.get_mut(&id) else {
             eprintln!("Task ({id}): not found");
             tracing::info!("Task ({id}): not found");
             return;
@@ -196,10 +210,10 @@ where
         task.state.store(false, Ordering::Relaxed);
     }
 
-    fn resume<U: Task>(&mut self) {
+    fn resume<U: UniqueId>(&mut self) {
         // Resume the task
         let id = U::unique_id();
-        let Some(task) = self.get_mut(&id) else {
+        let Some(task) = self.tasks.get_mut(&id) else {
             eprintln!("Task ({id}): not found");
             tracing::info!("Task ({id}): not found");
             return;
@@ -212,10 +226,10 @@ where
         task.state.store(true, Ordering::Relaxed);
     }
 
-    fn abort<U: Task>(&mut self) {
+    fn abort<U: UniqueId>(&mut self) {
         // Abort the task
         let id = U::unique_id();
-        let Some(task) = self.remove(&id) else {
+        let Some(task) = self.tasks.remove(&id) else {
             eprintln!("Task ({id}): not found");
             tracing::info!("Task ({id}): not found");
             return;
@@ -373,7 +387,7 @@ mod test {
     async fn compile_test() -> Result<(), ()> {
         // Sync task
         let mut scheduler = Scheduler::new();
-        #[derive(Clone)]
+        #[derive(Debug, Clone)]
         struct MySyncTask {
             state: Arc<RwLock<u8>>,
         }
@@ -391,32 +405,32 @@ mod test {
         }
         // Run the task once
         scheduler.run(task.clone());
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        scheduler.abort::<MySyncTask>();
+        eprintln!("State = {:?}", *state.read().unwrap());
+        assert_eq!(*state.read().unwrap(), 1);
         // Run the task every second
         scheduler.schedule(task.clone(), every(1.seconds()));
+        tokio::time::sleep(Duration::from_secs(5)).await;
+        scheduler.abort::<MySyncTask>();
+        eprintln!("State = {:?}", *state.read().unwrap());
+        assert_eq!(*state.read().unwrap(), 6);
         // Run the task every 3 seconds, 3 times
         scheduler.schedule(task.clone(), every(3.seconds()).count(3));
+        tokio::time::sleep(Duration::from_secs(10)).await;
+        scheduler.abort::<MySyncTask>();
+        eprintln!("State = {:?}", *state.read().unwrap());
+        assert_eq!(*state.read().unwrap(), 9);
         // Run the task every 1 minute and 2 seconds
         scheduler.schedule(task, every(1.minutes()).and(2.seconds()));
-        //scheduler.pause(MySyncTask::unique_id());
-        //scheduler.resume(MySyncTask::unique_id());
-        //scheduler.abort(MySyncTask::unique_id());
-
-        //<HashMap<u64, SyncTask> as TaskScheduler<MySyncTask>>::pause(
-        //    &mut scheduler,
-        //    MySyncTask::unique_id(),
-        //);
-        //<HashMap<u64, SyncTask> as TaskScheduler<MySyncTask>>::resume(
-        //    &mut scheduler,
-        //    MySyncTask::unique_id(),
-        //);
-        //<HashMap<u64, SyncTask> as TaskScheduler<MySyncTask>>::abort(
-        //    &mut scheduler,
-        //    MySyncTask::unique_id(),
-        //);
-        eprintln!("SYNC scheduler = {:?}", scheduler);
-        tokio::time::sleep(Duration::from_secs(3)).await;
+        tokio::time::sleep(Duration::from_secs(120)).await;
+        scheduler.pause::<MySyncTask>();
+        scheduler.resume::<MySyncTask>();
+        scheduler.abort::<MySyncTask>();
+        scheduler.pause::<MySyncTask>();
+        scheduler.resume::<MySyncTask>();
         eprintln!("State = {:?}", *state.read().unwrap());
-        assert_eq!(*state.read().unwrap(), 4);
+        assert_eq!(*state.read().unwrap(), 11);
 
         // Async Task
         let mut scheduler = AsyncScheduler::new();
@@ -445,41 +459,25 @@ mod test {
         // Run the task every second
         scheduler.schedule(task.clone(), every(1.seconds()));
         tokio::time::sleep(Duration::from_secs(5)).await;
-        //<Scheduler<AsyncTask> as TaskScheduler<MyAsyncTask>>::abort(
-        //    &mut scheduler,
-        //    MyAsyncTask::unique_id(),
-        //);
         scheduler.abort::<MyAsyncTask>();
         eprintln!("State = {:?}", *state.read().unwrap());
         assert_eq!(*state.read().unwrap(), 6);
         // Run the task every 3 seconds, 3 times
         scheduler.schedule(task.clone(), every(3.seconds()).count(3));
         tokio::time::sleep(Duration::from_secs(10)).await;
-        //scheduler.abort(MyAsyncTask::unique_id());
+        scheduler.abort::<MyAsyncTask>();
         eprintln!("State = {:?}", *state.read().unwrap());
         assert_eq!(*state.read().unwrap(), 9);
         // Run the task every 1 minute and 2 seconds
         scheduler.schedule(task, every(1.minutes()).and(2.seconds()).count(1));
         tokio::time::sleep(Duration::from_secs(120)).await;
-        //scheduler.abort(MyAsyncTask::unique_id());
+        scheduler.pause::<MyAsyncTask>();
+        scheduler.resume::<MyAsyncTask>();
+        scheduler.abort::<MyAsyncTask>();
+        scheduler.pause::<MyAsyncTask>();
+        scheduler.resume::<MyAsyncTask>();
         eprintln!("State = {:?}", *state.read().unwrap());
         assert_eq!(*state.read().unwrap(), 10);
-        //scheduler.pause(MyAsyncTask::unique_id());
-        //scheduler.resume(MyAsyncTask::unique_id());
-        //scheduler.abort(MyAsyncTask::unique_id());
-
-        //<HashMap<u64, AsyncTask> as TaskScheduler<MyAsyncTask>>::pause(
-        //    &mut scheduler,
-        //    MySyncTask::unique_id(),
-        //);
-        //<HashMap<u64, AsyncTask> as TaskScheduler<MyAsyncTask>>::resume(
-        //    &mut scheduler,
-        //    MySyncTask::unique_id(),
-        //);
-        //<HashMap<u64, AsyncTask> as TaskScheduler<MyAsyncTask>>::abort(
-        //    &mut scheduler,
-        //    MyAsyncTask::unique_id(),
-        //);
         assert!(false);
         Ok(())
     }
