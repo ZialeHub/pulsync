@@ -12,16 +12,8 @@ use std::{
 
 pub type TaskId = u64;
 
-//pub type Scheduler<T: SyncTaskHandler> = HashMap<TaskId, SyncTask>;
-//pub type AsyncScheduler<T: AsyncTaskHandler> = HashMap<TaskId, AsyncTask>;
-pub struct Scheduler<T: SyncTaskHandler> {
-    tasks: HashMap<TaskId, SyncTask>,
-    _phantom: std::marker::PhantomData<T>,
-}
-pub struct AsyncScheduler<T: AsyncTaskHandler> {
-    tasks: HashMap<TaskId, AsyncTask>,
-    _phantom: std::marker::PhantomData<T>,
-}
+pub type Scheduler<T> = HashMap<TaskId, SyncTask<T>>;
+pub type AsyncScheduler<T> = HashMap<TaskId, AsyncTask<T>>;
 
 pub trait TaskScheduler<T> {
     fn new() -> Self;
@@ -37,15 +29,12 @@ where
     T: Task + AsyncTaskHandler + Send + Sync + 'static,
 {
     fn new() -> Self {
-        Self {
-            tasks: HashMap::new(),
-            _phantom: std::marker::PhantomData,
-        }
+        HashMap::new()
     }
 
     fn schedule(&mut self, task: T, recurrence: Recurrence) {
         let id = T::unique_id();
-        if self.tasks.contains_key(&id) {
+        if self.contains_key(&id) {
             eprintln!("Task ({id}): already exists");
             tracing::info!("Task ({id}): already exists");
             return;
@@ -85,14 +74,15 @@ where
             state,
             handler,
             recurrence,
+            _phantom: std::marker::PhantomData,
         };
-        self.tasks.insert(task.id, task);
+        self.insert(task.id, task);
     }
 
     fn pause<U: UniqueId>(&mut self) {
         // Pause the task
         let id = U::unique_id();
-        let Some(task) = self.tasks.get_mut(&U::unique_id()) else {
+        let Some(task) = self.get_mut(&U::unique_id()) else {
             eprintln!("Task ({id}): not found");
             tracing::info!("Task ({id}): not found");
             return;
@@ -108,7 +98,7 @@ where
     fn resume<U: UniqueId>(&mut self) {
         // Resume the task
         let id = U::unique_id();
-        let Some(task) = self.tasks.get_mut(&T::unique_id()) else {
+        let Some(task) = self.get_mut(&T::unique_id()) else {
             eprintln!("Task ({id}): not found");
             tracing::info!("Task ({id}): not found");
             return;
@@ -124,7 +114,7 @@ where
     fn abort<U: UniqueId>(&mut self) {
         // Abort the task
         let id = U::unique_id();
-        let Some(task) = self.tasks.remove(&id) else {
+        let Some(task) = self.remove(&id) else {
             eprintln!("Task ({id}): not found");
             tracing::info!("Task ({id}): not found");
             return;
@@ -142,15 +132,12 @@ where
     T: Task + SyncTaskHandler + Send + Sync + 'static,
 {
     fn new() -> Self {
-        Self {
-            tasks: HashMap::new(),
-            _phantom: std::marker::PhantomData,
-        }
+        HashMap::new()
     }
 
     fn schedule(&mut self, task: T, recurrence: Recurrence) {
         let id = T::unique_id();
-        if self.tasks.contains_key(&id) {
+        if self.contains_key(&id) {
             eprintln!("Task ({id}): already exists");
             tracing::info!("Task ({id}): already exists");
             return;
@@ -190,14 +177,15 @@ where
             state,
             handler,
             recurrence,
+            _phantom: std::marker::PhantomData,
         };
-        self.tasks.insert(task.id, task);
+        self.insert(task.id, task);
     }
 
     fn pause<U: UniqueId>(&mut self) {
         // Pause the task
         let id = U::unique_id();
-        let Some(task) = self.tasks.get_mut(&id) else {
+        let Some(task) = self.get_mut(&id) else {
             eprintln!("Task ({id}): not found");
             tracing::info!("Task ({id}): not found");
             return;
@@ -213,7 +201,7 @@ where
     fn resume<U: UniqueId>(&mut self) {
         // Resume the task
         let id = U::unique_id();
-        let Some(task) = self.tasks.get_mut(&id) else {
+        let Some(task) = self.get_mut(&id) else {
             eprintln!("Task ({id}): not found");
             tracing::info!("Task ({id}): not found");
             return;
@@ -229,7 +217,7 @@ where
     fn abort<U: UniqueId>(&mut self) {
         // Abort the task
         let id = U::unique_id();
-        let Some(task) = self.tasks.remove(&id) else {
+        let Some(task) = self.remove(&id) else {
             eprintln!("Task ({id}): not found");
             tracing::info!("Task ({id}): not found");
             return;
@@ -263,13 +251,14 @@ where
     }
 }
 
-pub struct AsyncTask {
+pub struct AsyncTask<T: AsyncTaskHandler> {
     pub id: TaskId,
     pub state: Arc<AtomicBool>,
     pub handler: tokio::task::JoinHandle<()>,
     pub recurrence: Arc<RwLock<Recurrence>>,
+    _phantom: std::marker::PhantomData<T>,
 }
-impl std::fmt::Debug for AsyncTask {
+impl<T: AsyncTaskHandler> std::fmt::Debug for AsyncTask<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("AsyncTask")
             .field("id", &self.id)
@@ -278,13 +267,14 @@ impl std::fmt::Debug for AsyncTask {
     }
 }
 
-pub struct SyncTask {
+pub struct SyncTask<T: SyncTaskHandler> {
     pub id: TaskId,
     pub state: Arc<AtomicBool>,
     pub handler: tokio::task::JoinHandle<()>,
     pub recurrence: Arc<RwLock<Recurrence>>,
+    _phantom: std::marker::PhantomData<T>,
 }
-impl std::fmt::Debug for SyncTask {
+impl<T: SyncTaskHandler> std::fmt::Debug for SyncTask<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("SyncTask")
             .field("id", &self.id)
@@ -292,10 +282,6 @@ impl std::fmt::Debug for SyncTask {
             .finish()
     }
 }
-
-pub type AsyncFunc = dyn Future<Output = ()> + Send + 'static;
-
-pub type SyncFunc = dyn FnMut() -> () + Send;
 
 #[derive(Debug, Clone)]
 pub struct Recurrence {
@@ -313,6 +299,7 @@ impl Recurrence {
         self
     }
 }
+
 pub fn every(unit: RecurrenceUnit) -> Recurrence {
     Recurrence { unit, count: None }
 }
@@ -372,6 +359,8 @@ where
     }
 }
 
+// TODO Find a way to implement this for all unsigned integers
+// For now, it creates a conflict because the compiler can't decide which type to use
 //impl RecurrenceCast for u8 {}
 //impl RecurrenceCast for u16 {}
 //impl RecurrenceCast for u32 {}
