@@ -1,6 +1,5 @@
 use std::time::Duration;
 
-#[derive(Debug, Clone)]
 pub struct Recurrence {
     pub unit: RecurrenceUnit,
     pub count: Option<u64>,
@@ -22,7 +21,7 @@ pub fn every(unit: RecurrenceUnit) -> Recurrence {
 }
 
 /// Recurrence in seconds
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Copy)]
 pub struct RecurrenceUnit(u64);
 impl std::ops::Deref for RecurrenceUnit {
     type Target = u64;

@@ -73,6 +73,18 @@ pub mod async_scheduler {
             self.insert(task.id, task);
         }
 
+        fn reschedule<U: UniqueId>(&mut self, recurrence: Recurrence) {
+            // Reschedule the task
+            let id = U::unique_id();
+            let Some(task) = self.get_mut(&id) else {
+                eprintln!("Task ({id}): not found");
+                tracing::info!("Task ({id}): not found");
+                return;
+            };
+            let mut current_recurrence = task.recurrence.write().unwrap();
+            *current_recurrence = recurrence;
+        }
+
         fn pause<U: UniqueId>(&mut self) {
             // Pause the task
             let id = U::unique_id();

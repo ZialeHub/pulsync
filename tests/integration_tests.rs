@@ -108,4 +108,38 @@ mod test {
         assert_eq!(*state.read().unwrap(), 10);
         Ok(())
     }
+
+    #[tokio::test]
+    async fn async_reschedule_task() -> Result<(), ()> {
+        // Async Task
+        let mut scheduler = Scheduler::new();
+        #[derive(Clone)]
+        struct MyAsyncTask {
+            state: Arc<RwLock<u8>>,
+        }
+        let state = Arc::new(RwLock::new(0));
+        let task = MyAsyncTask {
+            state: state.clone(),
+        };
+        impl UniqueId for MyAsyncTask {}
+        impl Task for MyAsyncTask {}
+        impl AsyncTaskHandler for MyAsyncTask {
+            async fn run(&self) {
+                let mut state = self.state.write().unwrap();
+                *state += 1;
+            }
+        }
+
+        // Run the task once
+        scheduler.schedule(task, every(1.seconds()));
+        tokio::time::sleep(Duration::from_secs(3)).await;
+        eprintln!("State = {:?}", *state.read().unwrap());
+        assert_eq!(*state.read().unwrap(), 3);
+        scheduler.reschedule::<MyAsyncTask>(every(5.seconds()));
+        tokio::time::sleep(Duration::from_secs(10)).await;
+        scheduler.abort::<MyAsyncTask>();
+        eprintln!("State = {:?}", *state.read().unwrap());
+        assert_eq!(*state.read().unwrap(), 5);
+        Ok(())
+    }
 }

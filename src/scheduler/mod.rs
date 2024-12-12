@@ -13,6 +13,7 @@ pub type Scheduler<T> = HashMap<TaskId, T>;
 pub trait TaskScheduler<T> {
     fn new() -> Self;
     fn schedule(&mut self, task: T, recurrence: Recurrence);
+    fn reschedule<U: UniqueId>(&mut self, recurrence: Recurrence);
     fn pause<U: UniqueId>(&mut self);
     fn resume<U: UniqueId>(&mut self);
     fn abort<U: UniqueId>(&mut self);
