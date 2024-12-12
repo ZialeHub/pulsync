@@ -8,7 +8,7 @@ mod test {
     use pulsync::prelude::*;
 
     #[tokio::test]
-    async fn compile_test() -> Result<(), ()> {
+    async fn sync_scheduler_single_task() -> Result<(), ()> {
         // Sync task
         let mut scheduler = Scheduler::new();
         #[derive(Debug, Clone)]
@@ -55,7 +55,11 @@ mod test {
         scheduler.resume::<MySyncTask>();
         eprintln!("State = {:?}", *state.read().unwrap());
         assert_eq!(*state.read().unwrap(), 11);
+        Ok(())
+    }
 
+    #[tokio::test]
+    async fn async_scheduler_single_task() -> Result<(), ()> {
         // Async Task
         let mut scheduler = Scheduler::new();
         #[derive(Clone)]
@@ -102,7 +106,6 @@ mod test {
         scheduler.resume::<MyAsyncTask>();
         eprintln!("State = {:?}", *state.read().unwrap());
         assert_eq!(*state.read().unwrap(), 10);
-        assert!(false);
         Ok(())
     }
 }
