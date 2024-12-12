@@ -12,9 +12,19 @@ use std::{
 
 pub type TaskId = u64;
 
-pub type Scheduler<T> = HashMap<TaskId, T>;
+pub type Scheduler = HashMap<TaskId, SyncTask>;
+pub type AsyncScheduler = HashMap<TaskId, AsyncTask>;
 
-impl<T> TaskScheduler<T> for Scheduler<AsyncTask>
+pub trait TaskScheduler<T: Task> {
+    fn new() -> Self;
+    fn schedule(&mut self, task: T, recurrence: Recurrence);
+    fn pause<U: Task>(&mut self);
+    fn resume<U: Task>(&mut self);
+    fn abort<U: Task>(&mut self);
+    fn run(&self, task: T);
+}
+
+impl<T> TaskScheduler<T> for AsyncScheduler
 where
     T: Task + AsyncTaskHandler + Send + Sync + 'static,
 {
@@ -68,9 +78,10 @@ where
         self.insert(task.id, task);
     }
 
-    fn pause(&mut self, id: TaskId) {
+    fn pause<U: Task>(&mut self) {
         // Pause the task
-        let Some(task) = self.get_mut(&id) else {
+        let id = U::unique_id();
+        let Some(task) = self.get_mut(&U::unique_id()) else {
             eprintln!("Task ({id}): not found");
             tracing::info!("Task ({id}): not found");
             return;
@@ -83,9 +94,10 @@ where
         task.state.store(false, Ordering::Relaxed);
     }
 
-    fn resume(&mut self, id: TaskId) {
+    fn resume<U: Task>(&mut self) {
         // Resume the task
-        let Some(task) = self.get_mut(&id) else {
+        let id = U::unique_id();
+        let Some(task) = self.get_mut(&T::unique_id()) else {
             eprintln!("Task ({id}): not found");
             tracing::info!("Task ({id}): not found");
             return;
@@ -98,8 +110,9 @@ where
         task.state.store(true, Ordering::Relaxed);
     }
 
-    fn abort(&mut self, id: TaskId) {
+    fn abort<U: Task>(&mut self) {
         // Abort the task
+        let id = U::unique_id();
         let Some(task) = self.remove(&id) else {
             eprintln!("Task ({id}): not found");
             tracing::info!("Task ({id}): not found");
@@ -113,7 +126,7 @@ where
         tokio::spawn(async move { task.run().await });
     }
 }
-impl<T> TaskScheduler<T> for Scheduler<SyncTask>
+impl<T> TaskScheduler<T> for Scheduler
 where
     T: Task + SyncTaskHandler + Send + Sync + 'static,
 {
@@ -167,8 +180,9 @@ where
         self.insert(task.id, task);
     }
 
-    fn pause(&mut self, id: TaskId) {
+    fn pause<U: Task>(&mut self) {
         // Pause the task
+        let id = U::unique_id();
         let Some(task) = self.get_mut(&id) else {
             eprintln!("Task ({id}): not found");
             tracing::info!("Task ({id}): not found");
@@ -182,8 +196,9 @@ where
         task.state.store(false, Ordering::Relaxed);
     }
 
-    fn resume(&mut self, id: TaskId) {
+    fn resume<U: Task>(&mut self) {
         // Resume the task
+        let id = U::unique_id();
         let Some(task) = self.get_mut(&id) else {
             eprintln!("Task ({id}): not found");
             tracing::info!("Task ({id}): not found");
@@ -197,8 +212,9 @@ where
         task.state.store(true, Ordering::Relaxed);
     }
 
-    fn abort(&mut self, id: TaskId) {
+    fn abort<U: Task>(&mut self) {
         // Abort the task
+        let id = U::unique_id();
         let Some(task) = self.remove(&id) else {
             eprintln!("Task ({id}): not found");
             tracing::info!("Task ({id}): not found");
@@ -211,15 +227,6 @@ where
         // Run task once
         tokio::spawn(async move { task.run() });
     }
-}
-
-pub trait TaskScheduler<T: Task> {
-    fn new() -> Self;
-    fn schedule(&mut self, task: T, recurrence: Recurrence);
-    fn pause(&mut self, id: TaskId);
-    fn resume(&mut self, id: TaskId);
-    fn abort(&mut self, id: TaskId);
-    fn run(&self, task: T);
 }
 
 pub trait Task: UniqueId {}
@@ -365,7 +372,7 @@ mod test {
     #[tokio::test]
     async fn compile_test() -> Result<(), ()> {
         // Sync task
-        let mut scheduler = Scheduler::<SyncTask>::new();
+        let mut scheduler = Scheduler::new();
         #[derive(Clone)]
         struct MySyncTask {
             state: Arc<RwLock<u8>>,
@@ -412,7 +419,7 @@ mod test {
         assert_eq!(*state.read().unwrap(), 4);
 
         // Async Task
-        let mut scheduler: Scheduler<AsyncTask> = Scheduler::<AsyncTask>::new();
+        let mut scheduler = AsyncScheduler::new();
         #[derive(Clone)]
         struct MyAsyncTask {
             state: Arc<RwLock<u8>>,
@@ -438,31 +445,26 @@ mod test {
         // Run the task every second
         scheduler.schedule(task.clone(), every(1.seconds()));
         tokio::time::sleep(Duration::from_secs(5)).await;
-        <HashMap<u64, AsyncTask> as TaskScheduler<MyAsyncTask>>::abort(
-            &mut scheduler,
-            MyAsyncTask::unique_id(),
-        );
+        //<Scheduler<AsyncTask> as TaskScheduler<MyAsyncTask>>::abort(
+        //    &mut scheduler,
+        //    MyAsyncTask::unique_id(),
+        //);
+        scheduler.abort::<MyAsyncTask>();
         eprintln!("State = {:?}", *state.read().unwrap());
         assert_eq!(*state.read().unwrap(), 6);
         // Run the task every 3 seconds, 3 times
         scheduler.schedule(task.clone(), every(3.seconds()).count(3));
         tokio::time::sleep(Duration::from_secs(10)).await;
-        <HashMap<u64, AsyncTask> as TaskScheduler<MyAsyncTask>>::abort(
-            &mut scheduler,
-            MyAsyncTask::unique_id(),
-        );
+        //scheduler.abort(MyAsyncTask::unique_id());
         eprintln!("State = {:?}", *state.read().unwrap());
         assert_eq!(*state.read().unwrap(), 9);
         // Run the task every 1 minute and 2 seconds
         scheduler.schedule(task, every(1.minutes()).and(2.seconds()).count(1));
         tokio::time::sleep(Duration::from_secs(120)).await;
-        <HashMap<u64, AsyncTask> as TaskScheduler<MyAsyncTask>>::abort(
-            &mut scheduler,
-            MyAsyncTask::unique_id(),
-        );
+        //scheduler.abort(MyAsyncTask::unique_id());
         eprintln!("State = {:?}", *state.read().unwrap());
         assert_eq!(*state.read().unwrap(), 10);
-        scheduler.pause(MyAsyncTask::unique_id());
+        //scheduler.pause(MyAsyncTask::unique_id());
         //scheduler.resume(MyAsyncTask::unique_id());
         //scheduler.abort(MyAsyncTask::unique_id());
 
