@@ -22,15 +22,26 @@ pub mod async_scheduler {
     where
         T: Task + AsyncTaskHandler + Send + Sync + 'static,
     {
+        /// Create a new Asynchronous Scheduler.
         fn new() -> Self {
             HashMap::new()
         }
 
+        /// Add a task to the scheduler.
+        ///
+        /// The task will be executed every `recurrence` time (according to the `unit` and `count`).
+        ///
+        /// Do nothing if the task already exists in the scheduler.
+        ///
+        /// # Example
+        /// ```rust,ignore
+        /// scheduler.schedule(task, every(1.seconds()));
+        /// ```
         fn schedule(&mut self, task: T, recurrence: Recurrence) {
             let id = T::unique_id();
             if self.contains_key(&id) {
-                eprintln!("Task ({id}): already exists");
-                tracing::info!("Task ({id}): already exists");
+                eprintln!("[schedule] Task ({id}): already exists");
+                tracing::info!("[schedule] Task ({id}): already exists");
                 return;
             }
             let state = Arc::new(AtomicBool::new(true));
@@ -73,61 +84,100 @@ pub mod async_scheduler {
             self.insert(task.id, task);
         }
 
+        /// Update the recurrence of a task.
+        ///
+        /// Do nothing if the task does not exist in the scheduler.
+        ///
+        /// # Example
+        /// ```rust,ignore
+        /// scheduler.schedule(task, every(1.seconds()));
+        /// scheduler.reschedule::<MyAsyncTask>(every(3.seconds()));
+        /// ```
         fn reschedule<U: UniqueId>(&mut self, recurrence: Recurrence) {
             // Reschedule the task
             let id = U::unique_id();
             let Some(task) = self.get_mut(&id) else {
-                eprintln!("Task ({id}): not found");
-                tracing::info!("Task ({id}): not found");
+                eprintln!("[reschedule] Task ({id}): not found");
+                tracing::info!("[reschedule] Task ({id}): not found");
                 return;
             };
             let mut current_recurrence = task.recurrence.write().unwrap();
             *current_recurrence = recurrence;
         }
 
+        /// Pause the execution of a task.
+        ///
+        /// Do nothing if the task doesn't exist in the scheduler or if the task is already paused.
+        ///
+        /// # Example
+        /// ```rust,ignore
+        /// scheduler.pause::<MyAsyncTask>();
+        /// ```
         fn pause<U: UniqueId>(&mut self) {
             // Pause the task
             let id = U::unique_id();
             let Some(task) = self.get_mut(&U::unique_id()) else {
-                eprintln!("Task ({id}): not found");
-                tracing::info!("Task ({id}): not found");
+                eprintln!("[pause] Task ({id}): not found");
+                tracing::info!("[pause] Task ({id}): not found");
                 return;
             };
             if !task.state.load(Ordering::Relaxed) {
-                eprintln!("Task ({id}): already paused");
-                tracing::info!("Task ({id}): already paused");
+                eprintln!("[pause] Task ({id}): already paused");
+                tracing::info!("[pause] Task ({id}): already paused");
                 return;
             }
             task.state.store(false, Ordering::Relaxed);
         }
 
+        /// Resume the execution of a task.
+        ///
+        /// Do nothing if the task doesn't exist in the scheduler or if the task is already resumed.
+        ///
+        /// # Example
+        /// ```rust,ignore
+        /// scheduler.resume::<MyAsyncTask>();
+        /// ```
         fn resume<U: UniqueId>(&mut self) {
             // Resume the task
             let id = U::unique_id();
             let Some(task) = self.get_mut(&T::unique_id()) else {
-                eprintln!("Task ({id}): not found");
-                tracing::info!("Task ({id}): not found");
+                eprintln!("[resume] Task ({id}): not found");
+                tracing::info!("[resume] Task ({id}): not found");
                 return;
             };
             if task.state.load(Ordering::Relaxed) {
-                eprintln!("Task ({id}): already resumed");
-                tracing::info!("Task ({id}): already resumed");
+                eprintln!("[resume] Task ({id}): already resumed");
+                tracing::info!("[resume] Task ({id}): already resumed");
                 return;
             }
             task.state.store(true, Ordering::Relaxed);
         }
 
+        /// Abort the execution of a task. (The task will be removed from the scheduler)
+        ///
+        /// Do nothing if the task doesn't exist in the scheduler.
+        ///
+        /// # Example
+        /// ```rust,ignore
+        /// scheduler.abort::<MyAsyncTask>();
+        /// ```
         fn abort<U: UniqueId>(&mut self) {
             // Abort the task
             let id = U::unique_id();
             let Some(task) = self.remove(&id) else {
-                eprintln!("Task ({id}): not found");
-                tracing::info!("Task ({id}): not found");
+                eprintln!("[abort] Task ({id}): not found");
+                tracing::info!("[abort] Task ({id}): not found");
                 return;
             };
             task.handler.abort();
         }
 
+        /// Run a task once.
+        ///
+        /// # Example
+        /// ```rust,ignore
+        /// scheduler.run(task);
+        /// ```
         fn run(&self, task: T) {
             // Run task once
             tokio::spawn(async move { task.run().await });
