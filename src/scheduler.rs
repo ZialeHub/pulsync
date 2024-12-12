@@ -12,8 +12,7 @@ use std::{
 
 pub type TaskId = u64;
 
-pub type Scheduler<T> = HashMap<TaskId, SyncTask<T>>;
-pub type AsyncScheduler<T> = HashMap<TaskId, AsyncTask<T>>;
+pub type Scheduler<T> = HashMap<TaskId, T>;
 
 pub trait TaskScheduler<T> {
     fn new() -> Self;
@@ -24,7 +23,7 @@ pub trait TaskScheduler<T> {
     fn run(&self, task: T);
 }
 
-impl<T: AsyncTaskHandler> TaskScheduler<T> for AsyncScheduler<T>
+impl<T: AsyncTaskHandler> TaskScheduler<T> for Scheduler<AsyncTask<T>>
 where
     T: Task + AsyncTaskHandler + Send + Sync + 'static,
 {
@@ -127,7 +126,7 @@ where
         tokio::spawn(async move { task.run().await });
     }
 }
-impl<T: SyncTaskHandler> TaskScheduler<T> for Scheduler<T>
+impl<T: SyncTaskHandler> TaskScheduler<T> for Scheduler<SyncTask<T>>
 where
     T: Task + SyncTaskHandler + Send + Sync + 'static,
 {
@@ -422,7 +421,7 @@ mod test {
         assert_eq!(*state.read().unwrap(), 11);
 
         // Async Task
-        let mut scheduler = AsyncScheduler::new();
+        let mut scheduler = Scheduler::new();
         #[derive(Clone)]
         struct MyAsyncTask {
             state: Arc<RwLock<u8>>,
