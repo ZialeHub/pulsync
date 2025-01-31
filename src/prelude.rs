@@ -1,3 +1,4 @@
+#![doc(hidden)]
 pub use crate::recurrence::{every, Recurrence, RecurrenceCast};
 pub use crate::scheduler::{Scheduler, TaskScheduler};
 #[cfg(feature = "async")]
