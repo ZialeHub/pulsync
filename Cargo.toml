@@ -4,3 +4,11 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+tokio = { version = "1.42.0", default-features = false, features = ["rt", "time", "macros"] }
+tracing = { version = "0.1.27", default-features = false }
+
+[features]
+default = ["full"]
+full = ["async", "sync"]
+async = []
+sync = []
