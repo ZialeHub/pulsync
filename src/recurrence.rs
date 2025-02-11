@@ -8,6 +8,8 @@ use std::time::Duration;
 ///
 /// If the count is set to None, the task will be executed indefinitely.
 ///
+/// The parameter run_after is used to determine if the task should be executed after the first interval.
+///
 /// # Example
 /// ```rust,ignore
 /// // Execute the task every second for 3 times
@@ -16,8 +18,10 @@ use std::time::Duration;
 /// // Execute the task every 1 minute and 2 seconds
 /// let recurrence = every(1.minutes()).and(2.seconds());
 /// ```
+#[derive(Hash, Clone, Copy)]
 pub struct Recurrence {
     pub unit: RecurrenceUnit,
+    pub run_after: bool,
     pub count: Option<u64>,
 }
 impl Recurrence {
@@ -40,6 +44,14 @@ impl Recurrence {
         self.count = Some(count);
         self
     }
+
+    /// Set if the task should be executed after the first interval
+    ///
+    /// By default, the value is set to false
+    pub fn run_after(mut self, value: bool) -> Self {
+        self.run_after = value;
+        self
+    }
 }
 
 /// Create a new recurrence with a number of seconds
@@ -55,13 +67,17 @@ impl Recurrence {
 /// let recurrence = every(1.minutes());
 /// ```
 pub fn every(unit: RecurrenceUnit) -> Recurrence {
-    Recurrence { unit, count: None }
+    Recurrence {
+        unit,
+        run_after: false,
+        count: None,
+    }
 }
 
 /// RecurrenceUnit is a wrapper around u64 to represent the time interval between each execution of a task.
 ///
 /// It implements the Into trait to convert the RecurrenceUnit into a Duration used to wait for the next execution of the task.
-#[derive(Clone, Copy)]
+#[derive(Hash, Clone, Copy)]
 pub struct RecurrenceUnit(u64);
 
 impl std::ops::Deref for RecurrenceUnit {

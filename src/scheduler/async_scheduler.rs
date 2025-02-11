@@ -12,11 +12,67 @@ pub mod async_scheduler {
         recurrence::Recurrence,
         task::{
             async_task::async_task::{AsyncTask, AsyncTaskHandler},
-            Task, UniqueId,
+            Task, TaskId,
         },
     };
 
     use crate::scheduler::{Scheduler, TaskScheduler};
+
+    fn run_before_handler<T>(
+        id: TaskId,
+        tasks: Arc<RwLock<HashMap<TaskId, AsyncTask<T>>>>,
+        state: Arc<RwLock<T>>,
+        status: Arc<AtomicBool>,
+        mut recurrence: Recurrence,
+    ) -> tokio::task::JoinHandle<()>
+    where
+        T: Task + AsyncTaskHandler + Send + Sync + 'static,
+    {
+        tokio::spawn(async move {
+            loop {
+                match recurrence.count {
+                    None => {}
+                    Some(count) if count == 0 => break,
+                    Some(count) => {
+                        recurrence.count = Some(count - 1);
+                    }
+                }
+                if status.load(Ordering::Relaxed) {
+                    state.read().unwrap().run();
+                }
+                let _ = tokio::time::sleep(recurrence.unit.into()).await;
+            }
+            tasks.write().unwrap().remove(&id);
+        })
+    }
+
+    fn run_after_handler<T>(
+        id: TaskId,
+        tasks: Arc<RwLock<HashMap<TaskId, AsyncTask<T>>>>,
+        state: Arc<RwLock<T>>,
+        status: Arc<AtomicBool>,
+        mut recurrence: Recurrence,
+    ) -> tokio::task::JoinHandle<()>
+    where
+        T: Task + AsyncTaskHandler + Send + Sync + 'static,
+    {
+        tokio::spawn(async move {
+            loop {
+                let _ = tokio::time::sleep(recurrence.unit.into()).await;
+                match recurrence.count {
+                    None => {}
+                    Some(count) if count == 0 => break,
+                    Some(count) => {
+                        recurrence.count = Some(count - 1);
+                    }
+                }
+                if status.load(Ordering::Relaxed) {
+                    state.read().unwrap().run();
+                }
+            }
+            tasks.write().unwrap().remove(&id);
+        })
+    }
 
     impl<T: AsyncTaskHandler> TaskScheduler<T> for Scheduler<AsyncTask<T>>
     where
@@ -24,7 +80,7 @@ pub mod async_scheduler {
     {
         /// Create a new Asynchronous Scheduler.
         fn new() -> Self {
-            HashMap::new()
+            Arc::new(RwLock::new(HashMap::new()))
         }
 
         /// Add a task to the scheduler.
@@ -35,53 +91,35 @@ pub mod async_scheduler {
         ///
         /// # Example
         /// ```rust,ignore
-        /// scheduler.schedule(task, "salt", every(1.seconds()));
+        /// let id = scheduler.schedule(task, every(1.seconds())).unwrap();
         /// ```
-        fn schedule(&mut self, task: T, salt: impl ToString, recurrence: Recurrence) {
-            let id = T::unique_id(salt.to_string());
-            if self.contains_key(&id) {
+        fn schedule(&mut self, task: T, recurrence: Recurrence) -> Option<TaskId> {
+            let id = task.unique_id(recurrence);
+            if self.read().unwrap().contains_key(&id) {
                 eprintln!("[schedule] Task ({id}): already exists");
                 tracing::info!("[schedule] Task ({id}): already exists");
-                return;
+                return None;
             }
-            let state = Arc::new(AtomicBool::new(true));
-            let recurrence = Arc::new(RwLock::new(recurrence));
+            let status = Arc::new(AtomicBool::new(true));
+            let state = Arc::new(RwLock::new(task));
             let handler = {
+                let status = status.clone();
                 let state = state.clone();
-                let recurrence = recurrence.clone();
-                tokio::spawn(async move {
-                    loop {
-                        {
-                            let mut recurrence = recurrence.write().unwrap();
-                            match recurrence.count {
-                                None => {}
-                                Some(count) if count == 0 => break,
-                                Some(count) => {
-                                    recurrence.count = Some(count - 1);
-                                }
-                            }
-                        }
-                        if state.load(Ordering::Relaxed) {
-                            task.run().await;
-                        }
-                        {
-                            let duration = {
-                                let read_guard = recurrence.read().unwrap();
-                                read_guard.unit
-                            };
-                            let _ = tokio::time::sleep(duration.into()).await;
-                        }
-                    }
-                })
+                match recurrence.run_after {
+                    true => run_after_handler(id, self.clone(), state, status, recurrence),
+                    false => run_before_handler(id, self.clone(), state, status, recurrence),
+                }
             };
             let task = AsyncTask {
                 id,
+                created_at: chrono::Utc::now().naive_utc(),
                 state,
+                status,
                 handler,
                 recurrence,
-                _phantom: std::marker::PhantomData,
             };
-            self.insert(task.id, task);
+            self.write().unwrap().insert(task.id, task);
+            Some(id)
         }
 
         /// Update the recurrence of a task.
@@ -90,19 +128,36 @@ pub mod async_scheduler {
         ///
         /// # Example
         /// ```rust,ignore
-        /// scheduler.schedule(task, "salt", every(1.seconds()));
-        /// scheduler.reschedule::<MyAsyncTask>("salt", every(3.seconds()));
+        /// let id = scheduler.schedule(task, every(1.seconds())).unwrap();
+        /// let new_id = scheduler.reschedule(id, every(3.seconds())).unwrap();
         /// ```
-        fn reschedule<U: UniqueId>(&mut self, salt: impl ToString, recurrence: Recurrence) {
-            // Reschedule the task
-            let id = U::unique_id(salt.to_string());
-            let Some(task) = self.get_mut(&id) else {
+        fn reschedule(&mut self, id: TaskId, recurrence: Recurrence) -> Option<TaskId> {
+            let Some(task) = self.write().unwrap().remove(&id) else {
                 eprintln!("[reschedule] Task ({id}): not found");
                 tracing::info!("[reschedule] Task ({id}): not found");
-                return;
+                return None;
             };
-            let mut current_recurrence = task.recurrence.write().unwrap();
-            *current_recurrence = recurrence;
+            self.abort(id);
+            let status = task.status.clone();
+            let state = task.state.clone();
+            let handler = {
+                let status = status.clone();
+                let state = state.clone();
+                match recurrence.run_after {
+                    true => run_after_handler(id, self.clone(), state, status, recurrence),
+                    false => run_before_handler(id, self.clone(), state, status, recurrence),
+                }
+            };
+            let task = AsyncTask {
+                id,
+                created_at: chrono::Utc::now().naive_utc(),
+                state,
+                status,
+                handler,
+                recurrence,
+            };
+            self.write().unwrap().insert(task.id, task);
+            Some(id)
         }
 
         /// Pause the execution of a task.
@@ -111,22 +166,22 @@ pub mod async_scheduler {
         ///
         /// # Example
         /// ```rust,ignore
-        /// scheduler.pause::<MyAsyncTask>("salt");
+        /// let id = scheduler.schedule(task, every(1.seconds())).unwrap();
+        /// scheduler.pause(id);
         /// ```
-        fn pause<U: UniqueId>(&mut self, salt: impl ToString) {
-            // Pause the task
-            let id = U::unique_id(salt.to_string());
-            let Some(task) = self.get_mut(&id) else {
+        fn pause(&mut self, id: TaskId) {
+            let mut binding = self.write().unwrap();
+            let Some(task) = binding.get_mut(&id) else {
                 eprintln!("[pause] Task ({id}): not found");
                 tracing::info!("[pause] Task ({id}): not found");
                 return;
             };
-            if !task.state.load(Ordering::Relaxed) {
+            if !task.status.load(Ordering::Relaxed) {
                 eprintln!("[pause] Task ({id}): already paused");
                 tracing::info!("[pause] Task ({id}): already paused");
                 return;
             }
-            task.state.store(false, Ordering::Relaxed);
+            task.status.store(false, Ordering::Relaxed);
         }
 
         /// Resume the execution of a task.
@@ -135,22 +190,22 @@ pub mod async_scheduler {
         ///
         /// # Example
         /// ```rust,ignore
-        /// scheduler.resume::<MyAsyncTask>("salt");
+        /// let id = scheduler.schedule(task, every(1.seconds())).unwrap();
+        /// scheduler.resume(id);
         /// ```
-        fn resume<U: UniqueId>(&mut self, salt: impl ToString) {
-            // Resume the task
-            let id = U::unique_id(salt.to_string());
-            let Some(task) = self.get_mut(&id) else {
+        fn resume(&mut self, id: TaskId) {
+            let mut binding = self.write().unwrap();
+            let Some(task) = binding.get_mut(&id) else {
                 eprintln!("[resume] Task ({id}): not found");
                 tracing::info!("[resume] Task ({id}): not found");
                 return;
             };
-            if task.state.load(Ordering::Relaxed) {
+            if task.status.load(Ordering::Relaxed) {
                 eprintln!("[resume] Task ({id}): already resumed");
                 tracing::info!("[resume] Task ({id}): already resumed");
                 return;
             }
-            task.state.store(true, Ordering::Relaxed);
+            task.status.store(true, Ordering::Relaxed);
         }
 
         /// Abort the execution of a task. (The task will be removed from the scheduler)
@@ -159,12 +214,12 @@ pub mod async_scheduler {
         ///
         /// # Example
         /// ```rust,ignore
-        /// scheduler.abort::<MyAsyncTask>("salt");
+        /// let id = scheduler.schedule(task, every(1.seconds())).unwrap();
+        /// scheduler.abort(id);
         /// ```
-        fn abort<U: UniqueId>(&mut self, salt: impl ToString) {
-            // Abort the task
-            let id = U::unique_id(salt.to_string());
-            let Some(task) = self.remove(&id) else {
+        fn abort(&mut self, id: TaskId) {
+            let mut binding = self.write().unwrap();
+            let Some(task) = binding.remove(&id) else {
                 eprintln!("[abort] Task ({id}): not found");
                 tracing::info!("[abort] Task ({id}): not found");
                 return;
@@ -179,7 +234,6 @@ pub mod async_scheduler {
         /// scheduler.run(task);
         /// ```
         fn run(&self, task: T) {
-            // Run task once
             tokio::spawn(async move { task.run().await });
         }
     }

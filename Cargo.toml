@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 tokio = { version = "1.42.0", default-features = false, features = ["rt", "time", "macros"] }
 tracing = { version = "0.1.27", default-features = false }
+chrono = { version = "0.4.39", default-features = false, features = ["serde", "now"] }
 
 [features]
 default = ["full"]
