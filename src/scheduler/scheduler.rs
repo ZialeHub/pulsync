@@ -35,10 +35,10 @@ pub mod sync_scheduler {
         ///
         /// # Example
         /// ```rust,ignore
-        /// scheduler.schedule(task, every(1.seconds()));
+        /// scheduler.schedule(task, "salt", every(1.seconds()));
         /// ```
-        fn schedule(&mut self, task: T, recurrence: Recurrence) {
-            let id = T::unique_id();
+        fn schedule(&mut self, task: T, salt: impl ToString, recurrence: Recurrence) {
+            let id = T::unique_id(salt.to_string());
             if self.contains_key(&id) {
                 eprintln!("[schedule] Task ({id}): already exists");
                 tracing::info!("[schedule] Task ({id}): already exists");
@@ -90,11 +90,11 @@ pub mod sync_scheduler {
         ///
         /// # Example
         /// ```rust,ignore
-        /// scheduler.schedule(task, every(1.seconds()));
-        /// scheduler.reschedule::<MySyncTask>(every(3.seconds()));
+        /// scheduler.schedule(task, "salt", every(1.seconds()));
+        /// scheduler.reschedule::<MySyncTask>("salt", every(3.seconds()));
         /// ```
-        fn reschedule<U: UniqueId>(&mut self, recurrence: Recurrence) {
-            let id = U::unique_id();
+        fn reschedule<U: UniqueId>(&mut self, salt: impl ToString, recurrence: Recurrence) {
+            let id = U::unique_id(salt.to_string());
             let Some(task) = self.get_mut(&id) else {
                 eprintln!("[reschedule] Task ({id}): not found");
                 tracing::info!("[reschedule] Task ({id}): not found");
@@ -110,10 +110,10 @@ pub mod sync_scheduler {
         ///
         /// # Example
         /// ```rust,ignore
-        /// scheduler.pause::<MySyncTask>();
+        /// scheduler.pause::<MySyncTask>("salt");
         /// ```
-        fn pause<U: UniqueId>(&mut self) {
-            let id = U::unique_id();
+        fn pause<U: UniqueId>(&mut self, salt: impl ToString) {
+            let id = U::unique_id(salt.to_string());
             let Some(task) = self.get_mut(&id) else {
                 eprintln!("[pause] Task ({id}): not found");
                 tracing::info!("[pause] Task ({id}): not found");
@@ -133,10 +133,10 @@ pub mod sync_scheduler {
         ///
         /// # Example
         /// ```rust,ignore
-        /// scheduler.resume::<MySyncTask>();
+        /// scheduler.resume::<MySyncTask>("salt");
         /// ```
-        fn resume<U: UniqueId>(&mut self) {
-            let id = U::unique_id();
+        fn resume<U: UniqueId>(&mut self, salt: impl ToString) {
+            let id = U::unique_id(salt.to_string());
             let Some(task) = self.get_mut(&id) else {
                 eprintln!("[resume] Task ({id}): not found");
                 tracing::info!("[resume] Task ({id}): not found");
@@ -156,10 +156,10 @@ pub mod sync_scheduler {
         ///
         /// # Example
         /// ```rust,ignore
-        /// scheduler.abort::<MySyncTask>();
+        /// scheduler.abort::<MySyncTask>("salt");
         /// ```
-        fn abort<U: UniqueId>(&mut self) {
-            let id = U::unique_id();
+        fn abort<U: UniqueId>(&mut self, salt: impl ToString) {
+            let id = U::unique_id(salt.to_string());
             let Some(task) = self.remove(&id) else {
                 eprintln!("[abort] Task ({id}): not found");
                 tracing::info!("[abort] Task ({id}): not found");
