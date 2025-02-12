@@ -9,8 +9,8 @@ pub mod sync_task {
     use crate::task::{Task, TaskId};
 
     /// A trait for handling synchronous tasks.
-    pub trait SyncTaskHandler: Task {
-        fn run(&self);
+    pub trait SyncTaskHandler: Task + Send {
+        fn run(&mut self);
     }
 
     /// Represents a synchronous task, scheduled in the scheduler.
@@ -23,19 +23,20 @@ pub mod sync_task {
     pub struct SyncTask<T: SyncTaskHandler> {
         pub id: TaskId,
         pub created_at: NaiveDateTime,
-        pub state: Arc<RwLock<T>>,
+        //pub state: Arc<RwLock<T>>,
         pub status: Arc<AtomicBool>,
         pub handler: tokio::task::JoinHandle<()>,
         pub recurrence: Recurrence,
+        pub _phantom: std::marker::PhantomData<T>,
     }
 
     impl<T: SyncTaskHandler> std::fmt::Display for SyncTask<T> {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             write!(
                 f,
-                "[AsyncTask({})] {} started at {}",
+                "[SyncTask({})] started at {}",
                 self.id,
-                self.state.read().unwrap().title(),
+                //self.state.read().unwrap().title(),
                 self.created_at.date().to_string()
             )
         }

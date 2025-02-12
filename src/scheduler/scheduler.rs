@@ -38,7 +38,7 @@ pub mod sync_scheduler {
                     }
                 }
                 if status.load(Ordering::Relaxed) {
-                    state.read().unwrap().run();
+                    state.write().unwrap().run();
                 }
                 let _ = tokio::time::sleep(recurrence.unit.into()).await;
             }
@@ -67,19 +67,19 @@ pub mod sync_scheduler {
                     }
                 }
                 if status.load(Ordering::Relaxed) {
-                    state.read().unwrap().run();
+                    state.write().unwrap().run();
                 }
             }
             tasks.write().unwrap().remove(&id);
         })
     }
 
-    impl<T: SyncTaskHandler> TaskScheduler<T> for Scheduler<SyncTask<T>>
+    impl<T: SyncTaskHandler> TaskScheduler for Scheduler<SyncTask<T>>
     where
         T: Task + SyncTaskHandler + Send + Sync + 'static,
     {
         /// Create a new Synchonous Scheduler.
-        fn new() -> Self {
+        fn build() -> Self {
             Arc::new(RwLock::new(HashMap::new()))
         }
 
@@ -93,7 +93,7 @@ pub mod sync_scheduler {
         /// ```rust,ignore
         /// scheduler.schedule(task, every(1.seconds()));
         /// ```
-        fn schedule(&mut self, task: T, recurrence: Recurrence) -> Option<TaskId> {
+        fn schedule(&mut self, task: dyn Task, recurrence: Recurrence) -> Option<TaskId> {
             let id = task.unique_id(recurrence);
             if self.read().unwrap().contains_key(&id) {
                 eprintln!("[schedule] Task ({id}): already exists");
@@ -101,22 +101,24 @@ pub mod sync_scheduler {
                 return None;
             }
             let status = Arc::new(AtomicBool::new(true));
-            let state = Arc::new(RwLock::new(task));
+            //let state = Arc::new(RwLock::new(task));
             let handler = {
                 let status = status.clone();
-                let state = state.clone();
-                match recurrence.run_after {
-                    true => run_after_handler(id, self.clone(), state, status, recurrence),
-                    false => run_before_handler(id, self.clone(), state, status, recurrence),
-                }
+                //let state = state.clone();
+                tokio::spawn(async move {})
+                //match recurrence.run_after {
+                //    true => run_after_handler(id, self.clone(), state, status, recurrence),
+                //    false => run_before_handler(id, self.clone(), state, status, recurrence),
+                //}
             };
             let task = SyncTask {
                 id,
                 created_at: chrono::Utc::now().naive_utc(),
-                state,
+                //state,
                 status,
                 handler,
                 recurrence,
+                _phantom: std::marker::PhantomData::<T>,
             };
             self.write().unwrap().insert(task.id, task);
             Some(id)
@@ -234,8 +236,16 @@ pub mod sync_scheduler {
         /// ```rust,ignore
         /// scheduler.run(task);
         /// ```
-        fn run(&self, task: T) {
+        fn run(&self, mut task: impl SyncTaskHandler) {
             tokio::spawn(async move { task.run() });
+        }
+
+        fn get(&self) -> Vec<String> {
+            self.read()
+                .unwrap()
+                .values()
+                .map(|task| task.to_string())
+                .collect()
         }
     }
 }

@@ -12,22 +12,19 @@ pub mod async_scheduler {
         recurrence::Recurrence,
         task::{
             async_task::async_task::{AsyncTask, AsyncTaskHandler},
-            Task, TaskId,
+            TaskId,
         },
     };
 
     use crate::scheduler::{Scheduler, TaskScheduler};
 
-    fn run_before_handler<T>(
+    fn run_before_handler(
         id: TaskId,
-        tasks: Arc<RwLock<HashMap<TaskId, AsyncTask<T>>>>,
-        state: Arc<RwLock<T>>,
+        tasks: Arc<RwLock<HashMap<TaskId, AsyncTask>>>,
+        state: &'static Box<dyn AsyncTaskHandler + Send + Sync + 'static>,
         status: Arc<AtomicBool>,
         mut recurrence: Recurrence,
-    ) -> tokio::task::JoinHandle<()>
-    where
-        T: Task + AsyncTaskHandler + Send + Sync + 'static,
-    {
+    ) -> tokio::task::JoinHandle<()> {
         tokio::spawn(async move {
             loop {
                 match recurrence.count {
@@ -38,7 +35,7 @@ pub mod async_scheduler {
                     }
                 }
                 if status.load(Ordering::Relaxed) {
-                    state.read().unwrap().run();
+                    state.run().await;
                 }
                 let _ = tokio::time::sleep(recurrence.unit.into()).await;
             }
@@ -46,16 +43,13 @@ pub mod async_scheduler {
         })
     }
 
-    fn run_after_handler<T>(
+    fn run_after_handler(
         id: TaskId,
-        tasks: Arc<RwLock<HashMap<TaskId, AsyncTask<T>>>>,
-        state: Arc<RwLock<T>>,
+        tasks: Arc<RwLock<HashMap<TaskId, AsyncTask>>>,
+        state: &'static Box<dyn AsyncTaskHandler + Send + Sync + 'static>,
         status: Arc<AtomicBool>,
         mut recurrence: Recurrence,
-    ) -> tokio::task::JoinHandle<()>
-    where
-        T: Task + AsyncTaskHandler + Send + Sync + 'static,
-    {
+    ) -> tokio::task::JoinHandle<()> {
         tokio::spawn(async move {
             loop {
                 let _ = tokio::time::sleep(recurrence.unit.into()).await;
@@ -67,20 +61,17 @@ pub mod async_scheduler {
                     }
                 }
                 if status.load(Ordering::Relaxed) {
-                    state.read().unwrap().run();
+                    state.run().await;
                 }
             }
             tasks.write().unwrap().remove(&id);
         })
     }
 
-    impl<T: AsyncTaskHandler> TaskScheduler<T> for Scheduler<AsyncTask<T>>
-    where
-        T: Task + AsyncTaskHandler + Send + Sync + 'static,
-    {
+    impl TaskScheduler for Scheduler {
         /// Create a new Asynchronous Scheduler.
-        fn new() -> Self {
-            Arc::new(RwLock::new(HashMap::new()))
+        fn build() -> Self {
+            Arc::new(RwLock::new(HashMap::<TaskId, AsyncTask>::new()))
         }
 
         /// Add a task to the scheduler.
@@ -93,7 +84,11 @@ pub mod async_scheduler {
         /// ```rust,ignore
         /// let id = scheduler.schedule(task, every(1.seconds())).unwrap();
         /// ```
-        fn schedule(&mut self, task: T, recurrence: Recurrence) -> Option<TaskId> {
+        fn schedule(
+            &mut self,
+            task: Box<dyn AsyncTaskHandler + Send + Sync + 'static>,
+            recurrence: Recurrence,
+        ) -> Option<TaskId> {
             let id = task.unique_id(recurrence);
             if self.read().unwrap().contains_key(&id) {
                 eprintln!("[schedule] Task ({id}): already exists");
@@ -101,19 +96,46 @@ pub mod async_scheduler {
                 return None;
             }
             let status = Arc::new(AtomicBool::new(true));
-            let state = Arc::new(RwLock::new(task));
+            let recurrence = Arc::new(RwLock::new(recurrence));
+            let title = Arc::new(task.title());
             let handler = {
                 let status = status.clone();
-                let state = state.clone();
-                match recurrence.run_after {
-                    true => run_after_handler(id, self.clone(), state, status, recurrence),
-                    false => run_before_handler(id, self.clone(), state, status, recurrence),
-                }
+                let recurrence = recurrence.clone();
+                let tasks = self.clone();
+                tokio::spawn(async move {
+                    loop {
+                        {
+                            let mut recurrence = recurrence.write().unwrap();
+                            match recurrence.count {
+                                None => {}
+                                Some(count) if count == 0 => break,
+                                Some(count) => {
+                                    recurrence.count = Some(count - 1);
+                                }
+                            }
+                        }
+                        if status.load(Ordering::Relaxed) {
+                            task.run().await;
+                        }
+                        {
+                            let duration = {
+                                let read_guard = recurrence.read().unwrap();
+                                read_guard.unit
+                            };
+                            let _ = tokio::time::sleep(duration.into()).await;
+                        }
+                    }
+                    tasks.write().unwrap().remove(&id);
+                })
+                //match recurrence.run_after {
+                //    true => run_after_handler(id, self.clone(), &task, status, recurrence),
+                //    false => run_before_handler(id, self.clone(), &task, status, recurrence),
+                //}
             };
             let task = AsyncTask {
                 id,
                 created_at: chrono::Utc::now().naive_utc(),
-                state,
+                title,
                 status,
                 handler,
                 recurrence,
@@ -132,31 +154,32 @@ pub mod async_scheduler {
         /// let new_id = scheduler.reschedule(id, every(3.seconds())).unwrap();
         /// ```
         fn reschedule(&mut self, id: TaskId, recurrence: Recurrence) -> Option<TaskId> {
-            let Some(task) = self.write().unwrap().remove(&id) else {
+            let mut binding = self.write().unwrap();
+            let Some(task) = binding.get_mut(&id) else {
                 eprintln!("[reschedule] Task ({id}): not found");
                 tracing::info!("[reschedule] Task ({id}): not found");
                 return None;
             };
-            self.abort(id);
-            let status = task.status.clone();
-            let state = task.state.clone();
-            let handler = {
-                let status = status.clone();
-                let state = state.clone();
-                match recurrence.run_after {
-                    true => run_after_handler(id, self.clone(), state, status, recurrence),
-                    false => run_before_handler(id, self.clone(), state, status, recurrence),
-                }
-            };
-            let task = AsyncTask {
-                id,
-                created_at: chrono::Utc::now().naive_utc(),
-                state,
-                status,
-                handler,
-                recurrence,
-            };
-            self.write().unwrap().insert(task.id, task);
+            *task.recurrence.write().unwrap() = recurrence;
+            //self.abort(id);
+            //let status = task.status.clone();
+            //let handler = {
+            //    //let status = status.clone();
+            //    tokio::spawn(async move {})
+            //    //let state = state.clone();
+            //    //match recurrence.run_after {
+            //    //    true => run_after_handler(id, self.clone(), state, status, recurrence),
+            //    //    false => run_before_handler(id, self.clone(), state, status, recurrence),
+            //    //}
+            //};
+            //let task = AsyncTask {
+            //    id,
+            //    created_at: chrono::Utc::now().naive_utc(),
+            //    status,
+            //    handler,
+            //    recurrence,
+            //};
+            //self.write().unwrap().insert(task.id, task);
             Some(id)
         }
 
@@ -233,8 +256,16 @@ pub mod async_scheduler {
         /// ```rust,ignore
         /// scheduler.run(task);
         /// ```
-        fn run(&self, task: T) {
+        fn run(&self, task: impl AsyncTaskHandler) {
             tokio::spawn(async move { task.run().await });
+        }
+
+        fn get(&self) -> Vec<String> {
+            self.read()
+                .unwrap()
+                .values()
+                .map(|task| task.to_string())
+                .collect()
         }
     }
 }
