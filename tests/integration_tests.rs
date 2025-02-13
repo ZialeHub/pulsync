@@ -8,6 +8,7 @@ mod test {
     };
 
     use pulsync::{prelude::*, task::Salt};
+    use pulsync_derive::{Salt, Task};
 
     //#[tokio::test]
     //async fn sync_scheduler_single_task() -> Result<(), ()> {
@@ -74,7 +75,8 @@ mod test {
     async fn async_scheduler_single_task() -> Result<(), ()> {
         // Async Task
         let mut scheduler = Scheduler::build();
-        #[derive(Clone)]
+        #[derive(Clone, Task, Salt)]
+        #[title = "MyAsyncTask"]
         struct MyAsyncTask {
             state: Arc<RwLock<u8>>,
         }
@@ -82,13 +84,6 @@ mod test {
         let task = MyAsyncTask {
             state: state.clone(),
         };
-        impl Salt for MyAsyncTask {
-            fn salt(&self) -> String {
-                "MyAsyncTask".to_string()
-            }
-        }
-        impl UniqueId for MyAsyncTask {}
-        impl Task for MyAsyncTask {}
         impl AsyncTaskHandler for MyAsyncTask {
             fn run(&self) -> Pin<Box<dyn Future<Output = ()> + Send + '_ + Sync>> {
                 Box::pin(async move {
