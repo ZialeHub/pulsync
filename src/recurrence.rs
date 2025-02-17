@@ -33,7 +33,7 @@ impl Recurrence {
     /// let recurrence = every(1.minutes()).and(2.seconds());
     /// ```
     pub fn and(mut self, unit: RecurrenceUnit) -> Self {
-        *self.unit = *self.unit + *unit;
+        *self.unit += *unit;
         self
     }
 
@@ -94,9 +94,9 @@ impl std::ops::DerefMut for RecurrenceUnit {
     }
 }
 
-impl Into<Duration> for RecurrenceUnit {
-    fn into(self) -> Duration {
-        Duration::from_secs(self.0)
+impl From<RecurrenceUnit> for Duration {
+    fn from(value: RecurrenceUnit) -> Self {
+        Duration::from_secs(value.0)
     }
 }
 

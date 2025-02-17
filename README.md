@@ -12,14 +12,15 @@ Redundance is the type used to select how much a task will wait between each run
 
 ## Async / Sync
 
-Pulsync allow you to create sync and async tasks.
+Pulsync allow you to create async tasks (sync wip).
 
 # TODO
-- [ ] Scheduler struct
-- [ ] SheduleTask trait
-- [ ] UniqueId trait
-- [ ] Redundance API
-- [ ] Async and Sync tasks
+- [x] Scheduler struct
+- [x] SheduleTask trait
+- [x] UniqueId trait
+- [x] Redundance API
+- [x] Async tasks
+- [ ] Sync tasks
 - [ ] Unit Tests
 - [ ] Doc comments
 - [ ] README

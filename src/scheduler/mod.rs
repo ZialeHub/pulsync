@@ -4,13 +4,13 @@ use std::{
 };
 
 use crate::{
-    prelude::{AsyncTask, AsyncTaskHandler},
     recurrence::Recurrence,
+    task::async_task::{AsyncTask, AsyncTaskHandler},
     task::TaskId,
 };
 
+#[cfg(feature = "async")]
 pub mod async_scheduler;
-//pub mod scheduler;
 
 /// A type alias for the scheduler generic.
 ///

@@ -11,6 +11,6 @@ pulsync-derive = { path = "pulsync-derive" }
 
 [features]
 default = ["full"]
-full = ["async", "sync"]
+full = ["async"]
 async = []
 sync = []

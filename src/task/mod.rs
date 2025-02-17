@@ -2,8 +2,8 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 
 use crate::prelude::Recurrence;
 
+#[cfg(feature = "async")]
 pub mod async_task;
-//pub mod task;
 
 /// Type alias for the unique identifier of a task.
 pub type TaskId = u64;
