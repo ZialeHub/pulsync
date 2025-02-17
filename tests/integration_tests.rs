@@ -76,7 +76,8 @@ mod test {
         // Async Task
         let mut scheduler = Scheduler::build();
         #[derive(Clone, Task, Salt)]
-        #[title = "MyAsyncTask"]
+        #[title("MyAsyncTask state=|{self.state}|")]
+        #[salt("MyAsyncTaskSALT")]
         struct MyAsyncTask {
             state: Arc<RwLock<u8>>,
         }
@@ -133,7 +134,8 @@ mod test {
     async fn async_reschedule_task() -> Result<(), ()> {
         // Async Task
         let mut scheduler = Scheduler::build();
-        #[derive(Clone)]
+        #[derive(Clone, Task, Salt)]
+        #[salt("MyAsyncTaskSALT")]
         struct MyAsyncTask {
             state: Arc<RwLock<u8>>,
         }
@@ -141,13 +143,6 @@ mod test {
         let task = MyAsyncTask {
             state: state.clone(),
         };
-        impl Salt for MyAsyncTask {
-            fn salt(&self) -> String {
-                "MyAsyncTask".to_string()
-            }
-        }
-        impl UniqueId for MyAsyncTask {}
-        impl Task for MyAsyncTask {}
         impl AsyncTaskHandler for MyAsyncTask {
             fn run(&self) -> Pin<Box<dyn Future<Output = ()> + Send + '_ + Sync>> {
                 Box::pin(async move {
@@ -176,18 +171,12 @@ mod test {
     async fn async_scheduler_multiple_instance_of_task() -> Result<(), ()> {
         let mut scheduler = Scheduler::build();
 
-        #[derive(Debug, Clone)]
+        #[derive(Debug, Clone, Task, Salt)]
+        #[salt("{self.login}")]
         struct MyAsyncTask {
             login: Arc<RwLock<String>>,
             state: Arc<RwLock<u8>>,
         }
-        impl Salt for MyAsyncTask {
-            fn salt(&self) -> String {
-                self.login.read().unwrap().clone()
-            }
-        }
-        impl UniqueId for MyAsyncTask {}
-        impl Task for MyAsyncTask {}
         impl AsyncTaskHandler for MyAsyncTask {
             fn run(&self) -> Pin<Box<dyn Future<Output = ()> + Send + '_ + Sync>> {
                 Box::pin(async move {
@@ -242,24 +231,15 @@ mod test {
     #[tokio::test]
     async fn get_task_list() {
         let mut scheduler = Scheduler::build();
-        #[derive(Debug, Clone)]
+        #[derive(Debug, Clone, Task, Salt)]
+        #[title("First Task")]
+        #[salt("MyAsyncTask: {self.state}")]
         struct MyAsyncTask {
             state: Arc<RwLock<u8>>,
         }
         let task = MyAsyncTask {
             state: Arc::new(RwLock::new(0)),
         };
-        impl Salt for MyAsyncTask {
-            fn salt(&self) -> String {
-                format!("MyAsyncTask: {}", self.state.read().unwrap())
-            }
-        }
-        impl UniqueId for MyAsyncTask {}
-        impl Task for MyAsyncTask {
-            fn title(&self) -> String {
-                format!("First Task")
-            }
-        }
         impl AsyncTaskHandler for MyAsyncTask {
             fn run(&self) -> Pin<Box<dyn Future<Output = ()> + Send + '_ + Sync>> {
                 Box::pin(async move {
@@ -267,7 +247,9 @@ mod test {
                 })
             }
         }
-        #[derive(Debug, Clone)]
+        #[derive(Debug, Clone, Task, Salt)]
+        #[title("Second Task with login {self.login}")]
+        #[salt("MyAsyncTask2: {self.login}")]
         struct MyAsyncTask2 {
             login: Arc<RwLock<String>>,
             age: Arc<RwLock<u32>>,
@@ -276,17 +258,6 @@ mod test {
             login: Arc::new(RwLock::new(String::from("Pierre"))),
             age: Arc::new(RwLock::new(25)),
         };
-        impl Salt for MyAsyncTask2 {
-            fn salt(&self) -> String {
-                format!("MyAsyncTask2: {}", self.login.read().unwrap())
-            }
-        }
-        impl UniqueId for MyAsyncTask2 {}
-        impl Task for MyAsyncTask2 {
-            fn title(&self) -> String {
-                format!("Second Task with login {}", self.login.read().unwrap())
-            }
-        }
         impl AsyncTaskHandler for MyAsyncTask2 {
             fn run(&self) -> Pin<Box<dyn Future<Output = ()> + Send + '_ + Sync>> {
                 Box::pin(async move {
