@@ -20,24 +20,33 @@ pub mod async_scheduler {
 
     fn run_before_handler(
         id: TaskId,
+        task: Box<dyn AsyncTaskHandler + Send + Sync + 'static>,
         tasks: Arc<RwLock<HashMap<TaskId, AsyncTask>>>,
-        state: &'static Box<dyn AsyncTaskHandler + Send + Sync + 'static>,
         status: Arc<AtomicBool>,
-        mut recurrence: Recurrence,
+        recurrence: Arc<RwLock<Recurrence>>,
     ) -> tokio::task::JoinHandle<()> {
         tokio::spawn(async move {
             loop {
-                match recurrence.count {
-                    None => {}
-                    Some(count) if count == 0 => break,
-                    Some(count) => {
-                        recurrence.count = Some(count - 1);
+                {
+                    let mut recurrence = recurrence.write().unwrap();
+                    match recurrence.count {
+                        None => {}
+                        Some(count) if count == 0 => break,
+                        Some(count) => {
+                            recurrence.count = Some(count - 1);
+                        }
                     }
                 }
                 if status.load(Ordering::Relaxed) {
-                    state.run().await;
+                    task.run().await;
                 }
-                let _ = tokio::time::sleep(recurrence.unit.into()).await;
+                {
+                    let duration = {
+                        let read_guard = recurrence.read().unwrap();
+                        read_guard.unit
+                    };
+                    let _ = tokio::time::sleep(duration.into()).await;
+                }
             }
             tasks.write().unwrap().remove(&id);
         })
@@ -45,23 +54,32 @@ pub mod async_scheduler {
 
     fn run_after_handler(
         id: TaskId,
+        task: Box<dyn AsyncTaskHandler + Send + Sync + 'static>,
         tasks: Arc<RwLock<HashMap<TaskId, AsyncTask>>>,
-        state: &'static Box<dyn AsyncTaskHandler + Send + Sync + 'static>,
         status: Arc<AtomicBool>,
-        mut recurrence: Recurrence,
+        recurrence: Arc<RwLock<Recurrence>>,
     ) -> tokio::task::JoinHandle<()> {
         tokio::spawn(async move {
             loop {
-                let _ = tokio::time::sleep(recurrence.unit.into()).await;
-                match recurrence.count {
-                    None => {}
-                    Some(count) if count == 0 => break,
-                    Some(count) => {
-                        recurrence.count = Some(count - 1);
+                {
+                    let duration = {
+                        let read_guard = recurrence.read().unwrap();
+                        read_guard.unit
+                    };
+                    let _ = tokio::time::sleep(duration.into()).await;
+                }
+                {
+                    let mut recurrence = recurrence.write().unwrap();
+                    match recurrence.count {
+                        None => {}
+                        Some(count) if count == 0 => break,
+                        Some(count) => {
+                            recurrence.count = Some(count - 1);
+                        }
                     }
                 }
                 if status.load(Ordering::Relaxed) {
-                    state.run().await;
+                    task.run().await;
                 }
             }
             tasks.write().unwrap().remove(&id);
@@ -102,35 +120,10 @@ pub mod async_scheduler {
                 let status = status.clone();
                 let recurrence = recurrence.clone();
                 let tasks = self.clone();
-                tokio::spawn(async move {
-                    loop {
-                        {
-                            let mut recurrence = recurrence.write().unwrap();
-                            match recurrence.count {
-                                None => {}
-                                Some(count) if count == 0 => break,
-                                Some(count) => {
-                                    recurrence.count = Some(count - 1);
-                                }
-                            }
-                        }
-                        if status.load(Ordering::Relaxed) {
-                            task.run().await;
-                        }
-                        {
-                            let duration = {
-                                let read_guard = recurrence.read().unwrap();
-                                read_guard.unit
-                            };
-                            let _ = tokio::time::sleep(duration.into()).await;
-                        }
-                    }
-                    tasks.write().unwrap().remove(&id);
-                })
-                //match recurrence.run_after {
-                //    true => run_after_handler(id, self.clone(), &task, status, recurrence),
-                //    false => run_before_handler(id, self.clone(), &task, status, recurrence),
-                //}
+                match recurrence.clone().read().unwrap().run_after {
+                    true => run_after_handler(id, task, tasks, status, recurrence),
+                    false => run_before_handler(id, task, tasks, status, recurrence),
+                }
             };
             let task = AsyncTask {
                 id,

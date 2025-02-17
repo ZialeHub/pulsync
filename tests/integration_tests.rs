@@ -81,10 +81,7 @@ mod test {
         struct MyAsyncTask {
             state: Arc<RwLock<u8>>,
         }
-        let state = Arc::new(RwLock::new(0));
-        let task = MyAsyncTask {
-            state: state.clone(),
-        };
+        let task = MyAsyncTask::new(0);
         impl AsyncTaskHandler for MyAsyncTask {
             fn run(&self) -> Pin<Box<dyn Future<Output = ()> + Send + '_ + Sync>> {
                 Box::pin(async move {
@@ -97,27 +94,30 @@ mod test {
         // Run the task once
         scheduler.run(task.clone());
         tokio::time::sleep(Duration::from_secs(1)).await;
-        eprintln!("State = {:?}", *state.read().unwrap());
-        assert_eq!(*state.read().unwrap(), 1);
+        eprintln!("State = {:?}", *task.state.read().unwrap());
+        assert_eq!(*task.state.read().unwrap(), 1);
         // Run the task every second
         let id = scheduler
             .schedule(Box::new(task.clone()), every(1.seconds()))
             .unwrap();
         tokio::time::sleep(Duration::from_secs(5)).await;
         scheduler.abort(id);
-        eprintln!("State = {:?}", *state.read().unwrap());
-        assert_eq!(*state.read().unwrap(), 6);
+        eprintln!("State = {:?}", *task.state.read().unwrap());
+        assert_eq!(*task.state.read().unwrap(), 6);
         // Run the task every 3 seconds, 3 times
         let id = scheduler
             .schedule(Box::new(task.clone()), every(3.seconds()).count(3))
             .unwrap();
         tokio::time::sleep(Duration::from_secs(10)).await;
         scheduler.abort(id);
-        eprintln!("State = {:?}", *state.read().unwrap());
-        assert_eq!(*state.read().unwrap(), 9);
+        eprintln!("State = {:?}", *task.state.read().unwrap());
+        assert_eq!(*task.state.read().unwrap(), 9);
         // Run the task every 1 minute and 2 seconds
         let id = scheduler
-            .schedule(Box::new(task), every(1.minutes()).and(2.seconds()).count(1))
+            .schedule(
+                Box::new(task.clone()),
+                every(1.minutes()).and(2.seconds()).count(1),
+            )
             .unwrap();
         tokio::time::sleep(Duration::from_secs(120)).await;
         scheduler.pause(id);
@@ -125,8 +125,48 @@ mod test {
         scheduler.abort(id);
         scheduler.pause(id);
         scheduler.resume(id);
-        eprintln!("State = {:?}", *state.read().unwrap());
-        assert_eq!(*state.read().unwrap(), 10);
+        eprintln!("State = {:?}", *task.state.read().unwrap());
+        assert_eq!(*task.state.read().unwrap(), 10);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn async_scheduler_run_before_and_after() -> Result<(), ()> {
+        // Async Task
+        let mut scheduler = Scheduler::build();
+        #[derive(Clone, Task, Salt)]
+        #[title("MyAsyncTask state=|{self.state}|")]
+        #[salt("MyAsyncTaskSALT")]
+        struct MyAsyncTask {
+            state: Arc<RwLock<u8>>,
+        }
+        let task = MyAsyncTask::new(0);
+        impl AsyncTaskHandler for MyAsyncTask {
+            fn run(&self) -> Pin<Box<dyn Future<Output = ()> + Send + '_ + Sync>> {
+                Box::pin(async move {
+                    let mut state = self.state.write().unwrap();
+                    *state += 1;
+                })
+            }
+        }
+
+        // Run the task every 3 seconds after timer
+        let id = scheduler
+            .schedule(Box::new(task.clone()), every(3.seconds()).run_after(true))
+            .unwrap();
+        tokio::time::sleep(Duration::from_secs(9)).await;
+        scheduler.abort(id);
+        eprintln!("State = {:?}", *task.state.read().unwrap());
+        assert_eq!(*task.state.read().unwrap(), 2);
+
+        // Run the task every 3 seconds before timer
+        let id = scheduler
+            .schedule(Box::new(task.clone()), every(3.seconds()))
+            .unwrap();
+        tokio::time::sleep(Duration::from_secs(9)).await;
+        scheduler.abort(id);
+        eprintln!("State = {:?}", *task.state.read().unwrap());
+        assert_eq!(*task.state.read().unwrap(), 5);
         Ok(())
     }
 
@@ -139,10 +179,7 @@ mod test {
         struct MyAsyncTask {
             state: Arc<RwLock<u8>>,
         }
-        let state = Arc::new(RwLock::new(0));
-        let task = MyAsyncTask {
-            state: state.clone(),
-        };
+        let task = MyAsyncTask::new(0);
         impl AsyncTaskHandler for MyAsyncTask {
             fn run(&self) -> Pin<Box<dyn Future<Output = ()> + Send + '_ + Sync>> {
                 Box::pin(async move {
@@ -154,16 +191,16 @@ mod test {
 
         // Run the task once
         let id = scheduler
-            .schedule(Box::new(task), every(1.seconds()))
+            .schedule(Box::new(task.clone()), every(1.seconds()))
             .unwrap();
         tokio::time::sleep(Duration::from_secs(3)).await;
-        eprintln!("State = {:?}", *state.read().unwrap());
-        assert_eq!(*state.read().unwrap(), 3);
+        eprintln!("State = {:?}", *task.state.read().unwrap());
+        assert_eq!(*task.state.read().unwrap(), 3);
         let _new_id = scheduler.reschedule(id, every(5.seconds())).unwrap();
         tokio::time::sleep(Duration::from_secs(10)).await;
         scheduler.abort(id);
-        eprintln!("State = {:?}", *state.read().unwrap());
-        assert_eq!(*state.read().unwrap(), 5);
+        eprintln!("State = {:?}", *task.state.read().unwrap());
+        assert_eq!(*task.state.read().unwrap(), 5);
         Ok(())
     }
 
@@ -193,15 +230,15 @@ mod test {
 
         let state = Arc::new(RwLock::new(0));
         let task = MyAsyncTask {
-            login: Arc::new(RwLock::new("pierre".to_string())),
+            login: Arc::new(RwLock::new(String::from("pierre"))),
             state: state.clone(),
         };
         let task2 = MyAsyncTask {
-            login: Arc::new(RwLock::new("jean".to_string())),
+            login: Arc::new(RwLock::new(String::from("jean"))),
             state: state.clone(),
         };
         let task3 = MyAsyncTask {
-            login: Arc::new(RwLock::new("lucie".to_string())),
+            login: Arc::new(RwLock::new(String::from("lucie"))),
             state: state.clone(),
         };
         // Run the task once
@@ -237,9 +274,7 @@ mod test {
         struct MyAsyncTask {
             state: Arc<RwLock<u8>>,
         }
-        let task = MyAsyncTask {
-            state: Arc::new(RwLock::new(0)),
-        };
+        let task = MyAsyncTask::new(0);
         impl AsyncTaskHandler for MyAsyncTask {
             fn run(&self) -> Pin<Box<dyn Future<Output = ()> + Send + '_ + Sync>> {
                 Box::pin(async move {
@@ -254,10 +289,7 @@ mod test {
             login: Arc<RwLock<String>>,
             age: Arc<RwLock<u32>>,
         }
-        let task2 = MyAsyncTask2 {
-            login: Arc::new(RwLock::new(String::from("Pierre"))),
-            age: Arc::new(RwLock::new(25)),
-        };
+        let task2 = MyAsyncTask2::new(String::from("Pierre"), 25);
         impl AsyncTaskHandler for MyAsyncTask2 {
             fn run(&self) -> Pin<Box<dyn Future<Output = ()> + Send + '_ + Sync>> {
                 Box::pin(async move {
