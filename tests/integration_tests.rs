@@ -251,12 +251,92 @@ mod test {
     }
 
     #[test]
-    fn sync_run_until() -> Result<(), ()> {
+    fn async_run_until() -> Result<(), ()> {
+        let mut scheduler = Scheduler::build();
+        #[derive(Debug, Clone, Task, Salt)]
+        #[title("MySyncTask for {self.login}")]
+        #[salt("MySyncTask: {self.state}")]
+        struct MySyncTask {
+            login: Arc<RwLock<String>>,
+            state: Arc<RwLock<u8>>,
+        }
+        let value1 = Arc::new(RwLock::new(0));
+        let login1 = Arc::new(RwLock::new(String::from("Jean")));
+        let value2 = Arc::new(RwLock::new(0));
+        let login2 = Arc::new(RwLock::new(String::from("Pierre")));
+        let task1 = MySyncTask {
+            login: login1,
+            state: value1.clone(),
+        };
+        let task2 = MySyncTask {
+            login: login2,
+            state: value2.clone(),
+        };
+        impl SyncTaskHandler for MySyncTask {
+            fn run(&self) {
+                *self.state.write().unwrap() += 1;
+            }
+        }
+        let _id1 = scheduler
+            .schedule(Box::new(task1), every(2.seconds()).until(10.seconds()))
+            .unwrap();
+        let _id2 = scheduler
+            .schedule(Box::new(task2), every(3.seconds()).until(3.seconds()))
+            .unwrap();
+        std::thread::sleep(Duration::from_secs(15));
+        assert_eq!(scheduler.get().len(), 0);
+        assert_eq!(*value1.read().unwrap(), 5);
+        assert_eq!(*value2.read().unwrap(), 1);
         Ok(())
     }
 
     #[test]
     fn sync_run_until_datetime() -> Result<(), ()> {
+        let mut scheduler = Scheduler::build();
+        #[derive(Debug, Clone, Task, Salt)]
+        #[title("MySyncTask for {self.login}")]
+        #[salt("MySyncTask: {self.state}")]
+        struct MySyncTask {
+            login: Arc<RwLock<String>>,
+            state: Arc<RwLock<u8>>,
+        }
+        let value1 = Arc::new(RwLock::new(0));
+        let login1 = Arc::new(RwLock::new(String::from("Jean")));
+        let value2 = Arc::new(RwLock::new(0));
+        let login2 = Arc::new(RwLock::new(String::from("Pierre")));
+        let task1 = MySyncTask {
+            login: login1,
+            state: value1.clone(),
+        };
+        let task2 = MySyncTask {
+            login: login2,
+            state: value2.clone(),
+        };
+        impl SyncTaskHandler for MySyncTask {
+            fn run(&self) {
+                *self.state.write().unwrap() += 1;
+            }
+        }
+        let mut ten_seconds_in_future = chrono::Utc::now().naive_utc();
+        ten_seconds_in_future += chrono::Duration::seconds(10);
+        let _id1 = scheduler
+            .schedule(
+                Box::new(task1),
+                every(2.seconds()).until_datetime(ten_seconds_in_future),
+            )
+            .unwrap();
+        let mut three_seconds_in_future = chrono::Utc::now().naive_utc();
+        three_seconds_in_future += chrono::Duration::seconds(3);
+        let _id2 = scheduler
+            .schedule(
+                Box::new(task2),
+                every(3.seconds()).until_datetime(three_seconds_in_future),
+            )
+            .unwrap();
+        std::thread::sleep(Duration::from_secs(15));
+        assert_eq!(scheduler.get().len(), 0);
+        assert_eq!(*value1.read().unwrap(), 5);
+        assert_eq!(*value2.read().unwrap(), 1);
         Ok(())
     }
 }
@@ -526,11 +606,95 @@ mod test {
 
     #[tokio::test]
     async fn async_run_until() -> Result<(), ()> {
+        let mut scheduler = Scheduler::build();
+        #[derive(Debug, Clone, Task, Salt)]
+        #[title("MyAsyncTask for {self.login}")]
+        #[salt("MyAsyncTask: {self.state}")]
+        struct MyAsyncTask {
+            login: Arc<RwLock<String>>,
+            state: Arc<RwLock<u8>>,
+        }
+        let value1 = Arc::new(RwLock::new(0));
+        let login1 = Arc::new(RwLock::new(String::from("Jean")));
+        let value2 = Arc::new(RwLock::new(0));
+        let login2 = Arc::new(RwLock::new(String::from("Pierre")));
+        let task1 = MyAsyncTask {
+            login: login1,
+            state: value1.clone(),
+        };
+        let task2 = MyAsyncTask {
+            login: login2,
+            state: value2.clone(),
+        };
+        impl AsyncTaskHandler for MyAsyncTask {
+            fn run(&self) -> Pin<Box<dyn Future<Output = ()> + Send + '_ + Sync>> {
+                Box::pin(async move {
+                    *self.state.write().unwrap() += 1;
+                })
+            }
+        }
+        let _id1 = scheduler
+            .schedule(Box::new(task1), every(2.seconds()).until(10.seconds()))
+            .unwrap();
+        let _id2 = scheduler
+            .schedule(Box::new(task2), every(3.seconds()).until(3.seconds()))
+            .unwrap();
+        tokio::time::sleep(Duration::from_secs(15)).await;
+        assert_eq!(scheduler.get().len(), 0);
+        assert_eq!(*value1.read().unwrap(), 5);
+        assert_eq!(*value2.read().unwrap(), 1);
         Ok(())
     }
 
     #[tokio::test]
     async fn async_run_until_datetime() -> Result<(), ()> {
+        let mut scheduler = Scheduler::build();
+        #[derive(Debug, Clone, Task, Salt)]
+        #[title("MyAsyncTask for {self.login}")]
+        #[salt("MyAsyncTask: {self.state}")]
+        struct MyAsyncTask {
+            login: Arc<RwLock<String>>,
+            state: Arc<RwLock<u8>>,
+        }
+        let value1 = Arc::new(RwLock::new(0));
+        let login1 = Arc::new(RwLock::new(String::from("Jean")));
+        let value2 = Arc::new(RwLock::new(0));
+        let login2 = Arc::new(RwLock::new(String::from("Pierre")));
+        let task1 = MyAsyncTask {
+            login: login1,
+            state: value1.clone(),
+        };
+        let task2 = MyAsyncTask {
+            login: login2,
+            state: value2.clone(),
+        };
+        impl AsyncTaskHandler for MyAsyncTask {
+            fn run(&self) -> Pin<Box<dyn Future<Output = ()> + Send + '_ + Sync>> {
+                Box::pin(async move {
+                    *self.state.write().unwrap() += 1;
+                })
+            }
+        }
+        let mut ten_seconds_in_future = chrono::Utc::now().naive_utc();
+        ten_seconds_in_future += chrono::Duration::seconds(10);
+        let _id1 = scheduler
+            .schedule(
+                Box::new(task1),
+                every(2.seconds()).until_datetime(ten_seconds_in_future),
+            )
+            .unwrap();
+        let mut three_seconds_in_future = chrono::Utc::now().naive_utc();
+        three_seconds_in_future += chrono::Duration::seconds(3);
+        let _id2 = scheduler
+            .schedule(
+                Box::new(task2),
+                every(3.seconds()).until_datetime(three_seconds_in_future),
+            )
+            .unwrap();
+        tokio::time::sleep(Duration::from_secs(15)).await;
+        assert_eq!(scheduler.get().len(), 0);
+        assert_eq!(*value1.read().unwrap(), 5);
+        assert_eq!(*value2.read().unwrap(), 1);
         Ok(())
     }
 }
