@@ -4,13 +4,12 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-tokio = { version = "1.42.0", default-features = false, features = ["rt", "time", "macros"] }
 tracing = { version = "0.1.27", default-features = false }
 chrono = { version = "0.4.39", default-features = false, features = ["serde", "now"] }
+tokio = { version = "1.42.0", default-features = false, features = ["rt", "time", "macros"], optional = true }
 pulsync-derive = { path = "pulsync-derive" }
 
 [features]
-default = ["full"]
-full = ["async"]
-async = []
+default = ["sync"]
+async = ["dep:tokio"]
 sync = []

@@ -4,6 +4,8 @@ use crate::prelude::Recurrence;
 
 #[cfg(feature = "async")]
 pub mod async_task;
+#[cfg(feature = "sync")]
+pub mod sync_task;
 
 /// Type alias for the unique identifier of a task.
 pub type TaskId = u64;
