@@ -11,10 +11,9 @@ pub mod sync_task;
 pub type TaskId = u64;
 
 /// Trait to represent a task.
-/// A task is a unit of work that can be scheduled in the scheduler.\
+/// A task is a unit of work that can be scheduled in the scheduler.
+///
 /// The task must implement the `UniqueId` trait to generate a unique identifier.
-///
-///
 pub trait Task: UniqueId {
     fn title(&self) -> String {
         String::new()

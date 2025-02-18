@@ -152,25 +152,6 @@ impl TaskScheduler for Scheduler {
             return None;
         };
         *task.recurrence.write().unwrap() = recurrence;
-        //self.abort(id);
-        //let status = task.status.clone();
-        //let handler = {
-        //    //let status = status.clone();
-        //    tokio::spawn(async move {})
-        //    //let state = state.clone();
-        //    //match recurrence.run_after {
-        //    //    true => run_after_handler(id, self.clone(), state, status, recurrence),
-        //    //    false => run_before_handler(id, self.clone(), state, status, recurrence),
-        //    //}
-        //};
-        //let task = AsyncTask {
-        //    id,
-        //    created_at: chrono::Utc::now().naive_utc(),
-        //    status,
-        //    handler,
-        //    recurrence,
-        //};
-        //self.write().unwrap().insert(task.id, task);
         Some(id)
     }
 

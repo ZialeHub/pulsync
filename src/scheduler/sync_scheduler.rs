@@ -135,45 +135,6 @@ impl TaskScheduler for Scheduler {
         Some(id)
     }
 
-    /// Update the recurrence of a task.
-    ///
-    /// Do nothing if the task does not exist in the scheduler.
-    ///
-    /// # Example
-    /// ```rust,ignore
-    /// let id = scheduler.schedule(task, every(1.seconds())).unwrap();
-    /// let new_id = scheduler.reschedule(id, every(3.seconds())).unwrap();
-    /// ```
-    fn reschedule(&mut self, id: TaskId, recurrence: Recurrence) -> Option<TaskId> {
-        let mut binding = self.write().unwrap();
-        let Some(task) = binding.get_mut(&id) else {
-            eprintln!("[reschedule] Task ({id}): not found");
-            tracing::info!("[reschedule] Task ({id}): not found");
-            return None;
-        };
-        *task.recurrence.write().unwrap() = recurrence;
-        //self.abort(id);
-        //let status = task.status.clone();
-        //let handler = {
-        //    //let status = status.clone();
-        //    std::thread::spawn(async move {})
-        //    //let state = state.clone();
-        //    //match recurrence.run_after {
-        //    //    true => run_after_handler(id, self.clone(), state, status, recurrence),
-        //    //    false => run_before_handler(id, self.clone(), state, status, recurrence),
-        //    //}
-        //};
-        //let task = AsyncTask {
-        //    id,
-        //    created_at: chrono::Utc::now().naive_utc(),
-        //    status,
-        //    handler,
-        //    recurrence,
-        //};
-        //self.write().unwrap().insert(task.id, task);
-        Some(id)
-    }
-
     /// Pause the execution of a task.
     ///
     /// Do nothing if the task doesn't exist in the scheduler or if the task is already paused.
