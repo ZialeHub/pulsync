@@ -1,7 +1,7 @@
 use std::{
     future::Future,
     pin::Pin,
-    sync::{atomic::AtomicBool, Arc, RwLock},
+    sync::{Arc, RwLock},
 };
 
 use chrono::NaiveDateTime;
@@ -9,6 +9,8 @@ use chrono::NaiveDateTime;
 use crate::recurrence::Recurrence;
 
 use crate::task::{Task, TaskId};
+
+use super::TaskStatus;
 
 /// A trait for handling asynchronous tasks.
 pub trait AsyncTaskHandler: Task + Send {
@@ -27,7 +29,7 @@ pub trait AsyncTaskHandler: Task + Send {
 pub struct AsyncTask {
     pub id: TaskId,
     pub created_at: NaiveDateTime,
-    pub status: Arc<AtomicBool>,
+    pub status: Arc<RwLock<TaskStatus>>,
     pub title: Arc<String>,
     pub handler: tokio::task::JoinHandle<()>,
     pub recurrence: Arc<RwLock<Recurrence>>,

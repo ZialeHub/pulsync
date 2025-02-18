@@ -40,6 +40,7 @@ mod test {
             .schedule(Box::new(task.clone()), every(1.seconds()))
             .unwrap();
         std::thread::sleep(Duration::from_secs(5));
+        scheduler.abort(id);
         eprintln!("State = {:?}", *task.state.read().unwrap());
         assert_eq!(*task.state.read().unwrap(), 6);
         // Run the task every 3 seconds, 3 times
@@ -47,6 +48,7 @@ mod test {
             .schedule(Box::new(task.clone()), every(3.seconds()).count(3))
             .unwrap();
         std::thread::sleep(Duration::from_secs(10));
+        scheduler.abort(id);
         eprintln!("State = {:?}", *task.state.read().unwrap());
         assert_eq!(*task.state.read().unwrap(), 9);
         // Run the task every 1 minute and 2 seconds
@@ -57,6 +59,9 @@ mod test {
             )
             .unwrap();
         std::thread::sleep(Duration::from_secs(120));
+        scheduler.pause(id);
+        scheduler.resume(id);
+        scheduler.abort(id);
         scheduler.pause(id);
         scheduler.resume(id);
         eprintln!("State = {:?}", *task.state.read().unwrap());
@@ -87,6 +92,7 @@ mod test {
             .schedule(Box::new(task.clone()), every(3.seconds()).run_after(true))
             .unwrap();
         std::thread::sleep(Duration::from_secs(9));
+        scheduler.abort(id);
         eprintln!("State = {:?}", *task.state.read().unwrap());
         assert_eq!(*task.state.read().unwrap(), 2);
 
@@ -95,37 +101,7 @@ mod test {
             .schedule(Box::new(task.clone()), every(3.seconds()))
             .unwrap();
         std::thread::sleep(Duration::from_secs(9));
-        eprintln!("State = {:?}", *task.state.read().unwrap());
-        assert_eq!(*task.state.read().unwrap(), 5);
-        Ok(())
-    }
-
-    #[test]
-    fn sync_reschedule_task() -> Result<(), ()> {
-        // Sync Task
-        let mut scheduler = Scheduler::build();
-        #[derive(Clone, Task, Salt)]
-        #[salt("MySyncTaskSALT")]
-        struct MySyncTask {
-            state: Arc<RwLock<u8>>,
-        }
-        let task = MySyncTask::new(0);
-        impl SyncTaskHandler for MySyncTask {
-            fn run(&self) {
-                let mut state = self.state.write().unwrap();
-                *state += 1;
-            }
-        }
-
-        // Run the task once
-        let id = scheduler
-            .schedule(Box::new(task.clone()), every(1.seconds()))
-            .unwrap();
-        std::thread::sleep(Duration::from_secs(3));
-        eprintln!("State = {:?}", *task.state.read().unwrap());
-        assert_eq!(*task.state.read().unwrap(), 3);
-        let _new_id = scheduler.reschedule(id, every(5.seconds())).unwrap();
-        std::thread::sleep(Duration::from_secs(10));
+        scheduler.abort(id);
         eprintln!("State = {:?}", *task.state.read().unwrap());
         assert_eq!(*task.state.read().unwrap(), 5);
         Ok(())
@@ -182,8 +158,43 @@ mod test {
             .schedule(Box::new(task3.clone()), every(5.seconds()))
             .unwrap();
         std::thread::sleep(Duration::from_secs(15));
+        scheduler.abort(id1);
+        scheduler.abort(id2);
+        scheduler.abort(id3);
         eprintln!("State = {:?}", *state.read().unwrap());
         assert_eq!(*state.read().unwrap(), 10);
+        Ok(())
+    }
+
+    #[test]
+    fn sync_reschedule_task() -> Result<(), ()> {
+        // Sync Task
+        let mut scheduler = Scheduler::build();
+        #[derive(Clone, Task, Salt)]
+        #[salt("MySyncTaskSALT")]
+        struct MySyncTask {
+            state: Arc<RwLock<u8>>,
+        }
+        let task = MySyncTask::new(0);
+        impl SyncTaskHandler for MySyncTask {
+            fn run(&self) {
+                let mut state = self.state.write().unwrap();
+                *state += 1;
+            }
+        }
+
+        // Run the task once
+        let id = scheduler
+            .schedule(Box::new(task.clone()), every(1.seconds()))
+            .unwrap();
+        std::thread::sleep(Duration::from_secs(3));
+        eprintln!("State = {:?}", *task.state.read().unwrap());
+        assert_eq!(*task.state.read().unwrap(), 3);
+        let _new_id = scheduler.reschedule(id, every(5.seconds())).unwrap();
+        std::thread::sleep(Duration::from_secs(10));
+        scheduler.abort(id);
+        eprintln!("State = {:?}", *task.state.read().unwrap());
+        assert_eq!(*task.state.read().unwrap(), 5);
         Ok(())
     }
 

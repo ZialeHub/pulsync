@@ -1,16 +1,13 @@
 use std::{
     collections::HashMap,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc, RwLock,
-    },
+    sync::{Arc, RwLock},
 };
 
 use crate::{
     recurrence::Recurrence,
     task::{
         async_task::{AsyncTask, AsyncTaskHandler},
-        TaskId,
+        TaskId, TaskStatus,
     },
 };
 
@@ -20,11 +17,14 @@ fn run_before_handler(
     id: TaskId,
     task: Box<dyn AsyncTaskHandler + Send + Sync + 'static>,
     tasks: Arc<RwLock<HashMap<TaskId, AsyncTask>>>,
-    status: Arc<AtomicBool>,
+    status: Arc<RwLock<TaskStatus>>,
     recurrence: Arc<RwLock<Recurrence>>,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         loop {
+            if *status.read().unwrap() == TaskStatus::Abort {
+                break;
+            }
             {
                 let mut recurrence = recurrence.write().unwrap();
                 match recurrence.count {
@@ -35,7 +35,7 @@ fn run_before_handler(
                     }
                 }
             }
-            if status.load(Ordering::Relaxed) {
+            if *status.read().unwrap() == TaskStatus::Running {
                 task.run().await;
             }
             {
@@ -54,11 +54,14 @@ fn run_after_handler(
     id: TaskId,
     task: Box<dyn AsyncTaskHandler + Send + Sync + 'static>,
     tasks: Arc<RwLock<HashMap<TaskId, AsyncTask>>>,
-    status: Arc<AtomicBool>,
+    status: Arc<RwLock<TaskStatus>>,
     recurrence: Arc<RwLock<Recurrence>>,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
         loop {
+            if *status.read().unwrap() == TaskStatus::Abort {
+                break;
+            }
             {
                 let duration = {
                     let read_guard = recurrence.read().unwrap();
@@ -76,7 +79,7 @@ fn run_after_handler(
                     }
                 }
             }
-            if status.load(Ordering::Relaxed) {
+            if *status.read().unwrap() == TaskStatus::Running {
                 task.run().await;
             }
         }
@@ -111,7 +114,7 @@ impl TaskScheduler for Scheduler {
             tracing::info!("[schedule] Task ({id}): already exists");
             return None;
         }
-        let status = Arc::new(AtomicBool::new(true));
+        let status = Arc::new(RwLock::new(TaskStatus::Running));
         let recurrence = Arc::new(RwLock::new(recurrence));
         let title = Arc::new(task.title());
         let handler = {
@@ -171,12 +174,12 @@ impl TaskScheduler for Scheduler {
             tracing::info!("[pause] Task ({id}): not found");
             return;
         };
-        if !task.status.load(Ordering::Relaxed) {
+        if *task.status.read().unwrap() == TaskStatus::Paused {
             eprintln!("[pause] Task ({id}): already paused");
             tracing::info!("[pause] Task ({id}): already paused");
             return;
         }
-        task.status.store(false, Ordering::Relaxed);
+        *task.status.write().unwrap() = TaskStatus::Paused;
     }
 
     /// Resume the execution of a task.
@@ -195,12 +198,12 @@ impl TaskScheduler for Scheduler {
             tracing::info!("[resume] Task ({id}): not found");
             return;
         };
-        if task.status.load(Ordering::Relaxed) {
+        if *task.status.read().unwrap() == TaskStatus::Running {
             eprintln!("[resume] Task ({id}): already resumed");
             tracing::info!("[resume] Task ({id}): already resumed");
             return;
         }
-        task.status.store(true, Ordering::Relaxed);
+        *task.status.write().unwrap() = TaskStatus::Running;
     }
 
     /// Abort the execution of a task. (The task will be removed from the scheduler)
@@ -219,6 +222,7 @@ impl TaskScheduler for Scheduler {
             tracing::info!("[abort] Task ({id}): not found");
             return;
         };
+        *task.status.write().unwrap() = TaskStatus::Abort;
         task.handler.abort();
     }
 

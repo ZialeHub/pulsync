@@ -41,11 +41,9 @@ pub trait TaskScheduler {
         task: Box<dyn AsyncTaskHandler + Send + Sync + 'static>,
         recurrence: Recurrence,
     ) -> Option<TaskId>;
-    #[cfg(feature = "async")]
     fn reschedule(&mut self, id: TaskId, recurrence: Recurrence) -> Option<TaskId>;
     fn pause(&mut self, id: TaskId);
     fn resume(&mut self, id: TaskId);
-    #[cfg(feature = "async")]
     fn abort(&mut self, id: TaskId);
     #[cfg(feature = "sync")]
     fn run(&self, task: impl SyncTaskHandler);

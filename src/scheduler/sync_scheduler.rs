@@ -1,16 +1,13 @@
 use std::{
     collections::HashMap,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc, RwLock,
-    },
+    sync::{Arc, RwLock},
 };
 
 use crate::{
     recurrence::Recurrence,
     task::{
         sync_task::{SyncTask, SyncTaskHandler},
-        TaskId,
+        TaskId, TaskStatus,
     },
 };
 
@@ -20,11 +17,14 @@ fn run_before_handler(
     id: TaskId,
     task: Box<dyn SyncTaskHandler + Send + Sync + 'static>,
     tasks: Arc<RwLock<HashMap<TaskId, SyncTask>>>,
-    status: Arc<AtomicBool>,
+    status: Arc<RwLock<TaskStatus>>,
     recurrence: Arc<RwLock<Recurrence>>,
 ) -> std::thread::JoinHandle<()> {
     std::thread::spawn(move || {
         loop {
+            if *status.read().unwrap() == TaskStatus::Abort {
+                break;
+            }
             {
                 let mut recurrence = recurrence.write().unwrap();
                 match recurrence.count {
@@ -35,7 +35,7 @@ fn run_before_handler(
                     }
                 }
             }
-            if status.load(Ordering::Relaxed) {
+            if *status.read().unwrap() == TaskStatus::Running {
                 task.run();
             }
             {
@@ -43,7 +43,7 @@ fn run_before_handler(
                     let read_guard = recurrence.read().unwrap();
                     read_guard.unit
                 };
-                let _ = std::thread::sleep(duration.into());
+                std::thread::sleep(duration.into());
             }
         }
         tasks.write().unwrap().remove(&id);
@@ -54,17 +54,20 @@ fn run_after_handler(
     id: TaskId,
     task: Box<dyn SyncTaskHandler + Send + Sync + 'static>,
     tasks: Arc<RwLock<HashMap<TaskId, SyncTask>>>,
-    status: Arc<AtomicBool>,
+    status: Arc<RwLock<TaskStatus>>,
     recurrence: Arc<RwLock<Recurrence>>,
 ) -> std::thread::JoinHandle<()> {
     std::thread::spawn(move || {
         loop {
+            if *status.read().unwrap() == TaskStatus::Abort {
+                break;
+            }
             {
                 let duration = {
                     let read_guard = recurrence.read().unwrap();
                     read_guard.unit
                 };
-                let _ = std::thread::sleep(duration.into());
+                std::thread::sleep(duration.into());
             }
             {
                 let mut recurrence = recurrence.write().unwrap();
@@ -76,7 +79,7 @@ fn run_after_handler(
                     }
                 }
             }
-            if status.load(Ordering::Relaxed) {
+            if *status.read().unwrap() == TaskStatus::Running {
                 task.run();
             }
         }
@@ -111,7 +114,7 @@ impl TaskScheduler for Scheduler {
             tracing::info!("[schedule] Task ({id}): already exists");
             return None;
         }
-        let status = Arc::new(AtomicBool::new(true));
+        let status = Arc::new(RwLock::new(TaskStatus::Running));
         let recurrence = Arc::new(RwLock::new(recurrence));
         let title = Arc::new(task.title());
         let handler = {
@@ -135,6 +138,26 @@ impl TaskScheduler for Scheduler {
         Some(id)
     }
 
+    /// Update the recurrence of a task.
+    ///
+    /// Do nothing if the task does not exist in the scheduler.
+    ///
+    /// # Example
+    /// ```rust,ignore
+    /// let id = scheduler.schedule(task, every(1.seconds())).unwrap();
+    /// let new_id = scheduler.reschedule(id, every(3.seconds())).unwrap();
+    /// ```
+    fn reschedule(&mut self, id: TaskId, recurrence: Recurrence) -> Option<TaskId> {
+        let mut binding = self.write().unwrap();
+        let Some(task) = binding.get_mut(&id) else {
+            eprintln!("[reschedule] Task ({id}): not found");
+            tracing::info!("[reschedule] Task ({id}): not found");
+            return None;
+        };
+        *task.recurrence.write().unwrap() = recurrence;
+        Some(id)
+    }
+
     /// Pause the execution of a task.
     ///
     /// Do nothing if the task doesn't exist in the scheduler or if the task is already paused.
@@ -151,12 +174,12 @@ impl TaskScheduler for Scheduler {
             tracing::info!("[pause] Task ({id}): not found");
             return;
         };
-        if !task.status.load(Ordering::Relaxed) {
+        if *task.status.read().unwrap() == TaskStatus::Paused {
             eprintln!("[pause] Task ({id}): already paused");
             tracing::info!("[pause] Task ({id}): already paused");
             return;
         }
-        task.status.store(false, Ordering::Relaxed);
+        *task.status.write().unwrap() = TaskStatus::Paused;
     }
 
     /// Resume the execution of a task.
@@ -175,12 +198,31 @@ impl TaskScheduler for Scheduler {
             tracing::info!("[resume] Task ({id}): not found");
             return;
         };
-        if task.status.load(Ordering::Relaxed) {
+        if *task.status.read().unwrap() == TaskStatus::Running {
             eprintln!("[resume] Task ({id}): already resumed");
             tracing::info!("[resume] Task ({id}): already resumed");
             return;
         }
-        task.status.store(true, Ordering::Relaxed);
+        *task.status.write().unwrap() = TaskStatus::Running;
+    }
+
+    /// Abort the execution of a task. (The task will be removed from the scheduler)
+    ///
+    /// Do nothing if the task doesn't exist in the scheduler.
+    ///
+    /// # Example
+    /// ```rust,ignore
+    /// let id = scheduler.schedule(task, every(1.seconds())).unwrap();
+    /// scheduler.abort(id);
+    /// ```
+    fn abort(&mut self, id: TaskId) {
+        let mut binding = self.write().unwrap();
+        let Some(task) = binding.remove(&id) else {
+            eprintln!("[abort] Task ({id}): not found");
+            tracing::info!("[abort] Task ({id}): not found");
+            return;
+        };
+        *task.status.write().unwrap() = TaskStatus::Abort;
     }
 
     /// Run a task once.

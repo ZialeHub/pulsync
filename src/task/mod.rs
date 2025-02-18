@@ -10,6 +10,14 @@ pub mod sync_task;
 /// Type alias for the unique identifier of a task.
 pub type TaskId = u64;
 
+#[derive(Clone, Copy, PartialEq, Default)]
+pub enum TaskStatus {
+    Paused,
+    #[default]
+    Running,
+    Abort,
+}
+
 /// Trait to represent a task.
 /// A task is a unit of work that can be scheduled in the scheduler.
 ///
