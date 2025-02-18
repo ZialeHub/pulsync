@@ -1,5 +1,7 @@
 use std::time::Duration;
 
+use chrono::NaiveDateTime;
+
 /// Recurrence of a task
 ///
 /// The recurrence of a task is the time interval between each execution of the task.
@@ -23,6 +25,8 @@ pub struct Recurrence {
     pub unit: RecurrenceUnit,
     pub run_after: bool,
     pub count: Option<u64>,
+    pub limit: Option<RecurrenceUnit>,
+    pub limit_datetime: Option<NaiveDateTime>,
 }
 impl Recurrence {
     /// Increase the recurrence by a number of seconds
@@ -52,6 +56,40 @@ impl Recurrence {
         self.run_after = value;
         self
     }
+
+    /// Set the time interval when the recurrence should stop
+    ///
+    /// By default, the value is set to None
+    ///
+    /// # Example
+    /// ```rust,ignore
+    /// // Execute the task every second for 5 seconds
+    /// let recurrence = every(1.seconds()).until(5.seconds());
+    ///
+    /// // Execute the task every 1 minute for 10 minutes
+    /// let recurrence = every(1.minutes()).until(10.minutes());
+    /// ```
+    pub fn until(mut self, value: RecurrenceUnit) -> Self {
+        self.limit = Some(value);
+        self
+    }
+
+    /// Set the datetime when the recurrence should stop
+    ///
+    /// By default, the value is set to None
+    ///
+    /// # Example
+    /// ```rust,ignore
+    /// // Execute the task every second until 2021-01-01 00:00:00
+    /// let recurrence = every(1.seconds()).until_datetime(NaiveDateTime::parse_from_str("2021-01-01 00:00:00", "%Y-%m-%d %H:%M:%S")?);
+    ///
+    /// // Execute the task every 1 minute until 2021-01-01 00:00:00
+    /// let recurrence = every(1.minutes()).until_datetime(NaiveDateTime::parse_from_str("2021-01-01 00:00:00", "%Y-%m-%d %H:%M:%S")?);
+    /// ```
+    pub fn until_datetime(mut self, value: NaiveDateTime) -> Self {
+        self.limit_datetime = Some(value);
+        self
+    }
 }
 
 /// Create a new recurrence with a number of seconds
@@ -71,6 +109,8 @@ pub fn every(unit: RecurrenceUnit) -> Recurrence {
         unit,
         run_after: false,
         count: None,
+        limit: None,
+        limit_datetime: None,
     }
 }
 

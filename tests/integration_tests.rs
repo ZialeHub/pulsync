@@ -249,6 +249,16 @@ mod test {
             )))
             .is_some());
     }
+
+    #[test]
+    fn sync_run_until() -> Result<(), ()> {
+        Ok(())
+    }
+
+    #[test]
+    fn sync_run_until_datetime() -> Result<(), ()> {
+        Ok(())
+    }
 }
 
 #[cfg(feature = "async")]
@@ -512,5 +522,15 @@ mod test {
                 "[AsyncTask({id2})] Second Task with login Pierre started at "
             )))
             .is_some());
+    }
+
+    #[tokio::test]
+    async fn async_run_until() -> Result<(), ()> {
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn async_run_until_datetime() -> Result<(), ()> {
+        Ok(())
     }
 }

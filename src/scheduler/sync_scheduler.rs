@@ -3,19 +3,21 @@ use std::{
     sync::{Arc, RwLock},
 };
 
+use chrono::NaiveDateTime;
+
 use crate::{
     recurrence::Recurrence,
+    scheduler::{Scheduler, TaskScheduler},
     task::{
         sync_task::{SyncTask, SyncTaskHandler},
         TaskId, TaskStatus,
     },
 };
 
-use crate::scheduler::{Scheduler, TaskScheduler};
-
 fn run_before_handler(
     id: TaskId,
     task: Box<dyn SyncTaskHandler + Send + Sync + 'static>,
+    created_at: NaiveDateTime,
     tasks: Arc<RwLock<HashMap<TaskId, SyncTask>>>,
     status: Arc<RwLock<TaskStatus>>,
     recurrence: Arc<RwLock<Recurrence>>,
@@ -27,6 +29,18 @@ fn run_before_handler(
             }
             {
                 let mut recurrence = recurrence.write().unwrap();
+                if let Some(limit) = recurrence.limit {
+                    let now = chrono::Utc::now().naive_utc();
+                    let elapsed_time = now - created_at;
+                    if elapsed_time.num_seconds() as u64 >= *limit {
+                        break;
+                    }
+                }
+                if let Some(limit_datetime) = recurrence.limit_datetime {
+                    if limit_datetime <= chrono::Utc::now().naive_utc() {
+                        break;
+                    }
+                }
                 match recurrence.count {
                     None => {}
                     Some(0) => break,
@@ -53,6 +67,7 @@ fn run_before_handler(
 fn run_after_handler(
     id: TaskId,
     task: Box<dyn SyncTaskHandler + Send + Sync + 'static>,
+    created_at: NaiveDateTime,
     tasks: Arc<RwLock<HashMap<TaskId, SyncTask>>>,
     status: Arc<RwLock<TaskStatus>>,
     recurrence: Arc<RwLock<Recurrence>>,
@@ -71,6 +86,18 @@ fn run_after_handler(
             }
             {
                 let mut recurrence = recurrence.write().unwrap();
+                if let Some(limit) = recurrence.limit {
+                    let now = chrono::Utc::now().naive_utc();
+                    let elapsed_time = now - created_at;
+                    if elapsed_time.num_seconds() as u64 >= *limit {
+                        break;
+                    }
+                }
+                if let Some(limit_datetime) = recurrence.limit_datetime {
+                    if limit_datetime <= chrono::Utc::now().naive_utc() {
+                        break;
+                    }
+                }
                 match recurrence.count {
                     None => {}
                     Some(0) => break,
@@ -117,18 +144,19 @@ impl TaskScheduler for Scheduler {
         let status = Arc::new(RwLock::new(TaskStatus::Running));
         let recurrence = Arc::new(RwLock::new(recurrence));
         let title = Arc::new(task.title());
+        let created_at = chrono::Utc::now().naive_utc();
         let handler = {
             let status = status.clone();
             let recurrence = recurrence.clone();
             let tasks = self.clone();
             match recurrence.clone().read().unwrap().run_after {
-                true => run_after_handler(id, task, tasks, status, recurrence),
-                false => run_before_handler(id, task, tasks, status, recurrence),
+                true => run_after_handler(id, task, created_at, tasks, status, recurrence),
+                false => run_before_handler(id, task, created_at, tasks, status, recurrence),
             }
         };
         let task = SyncTask {
             id,
-            created_at: chrono::Utc::now().naive_utc(),
+            created_at,
             title,
             status,
             handler,
