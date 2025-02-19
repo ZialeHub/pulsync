@@ -22,11 +22,11 @@ use chrono::NaiveDateTime;
 /// ```
 #[derive(Hash, Clone, Copy)]
 pub struct Recurrence {
-    pub unit: RecurrenceUnit,
-    pub run_after: bool,
-    pub count: Option<u64>,
-    pub limit: Option<RecurrenceUnit>,
-    pub limit_datetime: Option<NaiveDateTime>,
+    pub(crate) unit: RecurrenceUnit,
+    pub(crate) run_after: bool,
+    pub(crate) count: Option<u64>,
+    pub(crate) limit: Option<RecurrenceUnit>,
+    pub(crate) limit_datetime: Option<NaiveDateTime>,
 }
 impl Recurrence {
     /// Increase the recurrence by a number of seconds

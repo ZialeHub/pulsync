@@ -1,6 +1,6 @@
 use std::hash::{DefaultHasher, Hash, Hasher};
 
-use crate::prelude::Recurrence;
+use crate::recurrence::Recurrence;
 
 #[cfg(feature = "async")]
 pub mod async_task;
@@ -11,7 +11,7 @@ pub mod sync_task;
 pub type TaskId = u64;
 
 #[derive(Clone, Copy, PartialEq, Default)]
-pub enum TaskStatus {
+pub(super) enum TaskStatus {
     Paused,
     #[default]
     Running,

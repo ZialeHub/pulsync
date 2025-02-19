@@ -6,10 +6,7 @@ mod test {
         time::Duration,
     };
 
-    use pulsync::{
-        prelude::*,
-        task::{sync_task::SyncTaskHandler, Salt},
-    };
+    use pulsync::prelude::*;
     use pulsync_derive::{Salt, Task};
 
     #[test]
@@ -351,7 +348,7 @@ mod test {
         time::Duration,
     };
 
-    use pulsync::{prelude::*, task::Salt};
+    use pulsync::prelude::*;
     use pulsync_derive::{Salt, Task};
 
     #[tokio::test]

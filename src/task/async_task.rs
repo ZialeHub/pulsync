@@ -6,9 +6,10 @@ use std::{
 
 use chrono::NaiveDateTime;
 
-use crate::recurrence::Recurrence;
-
-use crate::task::{Task, TaskId};
+use crate::{
+    recurrence::Recurrence,
+    task::{Task, TaskId},
+};
 
 use super::TaskStatus;
 
@@ -27,12 +28,12 @@ pub trait AsyncTaskHandler: Task + Send {
 /// * `handler` - The handler of the task.
 /// * `recurrence` - The recurrence of the task.
 pub struct AsyncTask {
-    pub id: TaskId,
-    pub created_at: NaiveDateTime,
-    pub status: Arc<RwLock<TaskStatus>>,
-    pub title: Arc<String>,
-    pub handler: tokio::task::JoinHandle<()>,
-    pub recurrence: Arc<RwLock<Recurrence>>,
+    pub(crate) id: TaskId,
+    pub(crate) created_at: NaiveDateTime,
+    pub(crate) status: Arc<RwLock<TaskStatus>>,
+    pub(crate) title: Arc<String>,
+    pub(crate) handler: tokio::task::JoinHandle<()>,
+    pub(crate) recurrence: Arc<RwLock<Recurrence>>,
 }
 
 impl std::fmt::Display for AsyncTask {

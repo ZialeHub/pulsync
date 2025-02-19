@@ -2,9 +2,10 @@ use std::sync::{Arc, RwLock};
 
 use chrono::NaiveDateTime;
 
-use crate::recurrence::Recurrence;
-
-use crate::task::{Task, TaskId, TaskStatus};
+use crate::{
+    recurrence::Recurrence,
+    task::{Task, TaskId, TaskStatus},
+};
 
 /// A trait for handling asynchronous tasks.
 pub trait SyncTaskHandler: Task + Send {
@@ -21,12 +22,12 @@ pub trait SyncTaskHandler: Task + Send {
 /// * `handler` - The handler of the task.
 /// * `recurrence` - The recurrence of the task.
 pub struct SyncTask {
-    pub id: TaskId,
-    pub created_at: NaiveDateTime,
-    pub status: Arc<RwLock<TaskStatus>>,
-    pub title: Arc<String>,
-    pub handler: std::thread::JoinHandle<()>,
-    pub recurrence: Arc<RwLock<Recurrence>>,
+    pub(crate) id: TaskId,
+    pub(crate) created_at: NaiveDateTime,
+    pub(crate) status: Arc<RwLock<TaskStatus>>,
+    pub(crate) title: Arc<String>,
+    pub(crate) _handler: std::thread::JoinHandle<()>,
+    pub(crate) recurrence: Arc<RwLock<Recurrence>>,
 }
 
 impl std::fmt::Display for SyncTask {

@@ -145,7 +145,7 @@ impl TaskScheduler for Scheduler {
         let recurrence = Arc::new(RwLock::new(recurrence));
         let title = Arc::new(task.title());
         let created_at = chrono::Utc::now().naive_utc();
-        let handler = {
+        let _handler = {
             let status = status.clone();
             let recurrence = recurrence.clone();
             let tasks = self.clone();
@@ -159,7 +159,7 @@ impl TaskScheduler for Scheduler {
             created_at,
             title,
             status,
-            handler,
+            _handler,
             recurrence,
         };
         self.write().unwrap().insert(task.id, task);

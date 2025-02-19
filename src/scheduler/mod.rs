@@ -10,9 +10,9 @@ use crate::task::sync_task::{SyncTask, SyncTaskHandler};
 use crate::{recurrence::Recurrence, task::TaskId};
 
 #[cfg(feature = "async")]
-pub mod async_scheduler;
+mod async_scheduler;
 #[cfg(feature = "sync")]
-pub mod sync_scheduler;
+mod sync_scheduler;
 
 /// A type alias for the scheduler generic.
 ///
