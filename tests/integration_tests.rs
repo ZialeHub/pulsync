@@ -248,7 +248,7 @@ mod test {
     }
 
     #[test]
-    fn async_run_until() -> Result<(), ()> {
+    fn sync_run_until() -> Result<(), ()> {
         let mut scheduler = Scheduler::build();
         #[derive(Debug, Clone, Task, Salt)]
         #[title("MySyncTask for {self.login}")]
