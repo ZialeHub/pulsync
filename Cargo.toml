@@ -2,6 +2,10 @@
 name = "pulsync"
 version = "0.1.0"
 edition = "2021"
+authors = ["Ziale"]
+repository = "https://github.com/ZialeHub/pulsync"
+license-file = "LICENSE"
+keywords = ["pulsync", "sync", "async", "scheduler", "task"]
 
 [dependencies]
 tracing = { version = "0.1.27", default-features = false }
