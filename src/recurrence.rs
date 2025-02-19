@@ -140,7 +140,8 @@ impl From<RecurrenceUnit> for Duration {
     }
 }
 
-/// RecurrenceCast is a trait to cast a number into a RecurrenceUnit\
+/// RecurrenceCast is a trait to cast a number into a RecurrenceUnit
+///
 /// It provides methods to convert a number into a RecurrenceUnit with a specific time unit.
 pub trait RecurrenceCast
 where
@@ -175,9 +176,4 @@ where
     }
 }
 
-// TODO Find a way to implement this for all unsigned integers
-// For now, it creates a conflict because the compiler can't decide which type to use
-//impl RecurrenceCast for u8 {}
-//impl RecurrenceCast for u16 {}
-//impl RecurrenceCast for u32 {}
 impl RecurrenceCast for u64 {}

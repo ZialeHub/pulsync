@@ -13,7 +13,50 @@ use syn::{
 /// and wrap each fields inside Arc<RwLock<>>.
 ///
 /// The `title` attribute, allow the user to choose a unique title.
-/// If the title attribute is not passed, the user can implement the
+///
+/// # Example
+/// ```rust,ignore
+/// #[derive(Task)]
+/// #[title(format = "Task {self.id} {self.name}")]
+/// struct Task {
+///   id: Arc<RwLock<u32>>,
+///   name: Arc<RwLock<String>>,
+///   ...
+/// }
+///
+/// struct SecondTask {
+///  id: Arc<RwLock<u32>>,
+///  ...
+/// }
+/// ```
+///
+/// In this example, the task implementation will look like this:
+/// ```rust,ignore
+/// impl Task {
+///     pub fn new(id: u32, name: String) -> Self {
+///         Self {
+///             id: Arc::new(RwLock::new(id)),
+///             name: Arc::new(RwLock::new(name)),
+///         }
+///     }
+/// }
+/// impl UniqueId for Task {}
+/// impl Task for Task {
+///    fn title(&self) -> String {
+///         format!("Task {} {}", &*self.id.read().unwrap(), &*self.name.read().unwrap())
+///    }
+/// }
+///
+/// impl SecondTask {
+///     pub fn new(id: u32) -> Self {
+///         Self {
+///             id: Arc::new(RwLock::new(id)),
+///         }
+///     }
+/// }
+/// impl UniqueId for SecondTask {}
+/// impl Task for SecondTask {}
+/// ```
 #[proc_macro_derive(Task, attributes(title))]
 pub fn derive_task(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);
@@ -238,6 +281,41 @@ impl Parse for FormatedString {
     }
 }
 
+/// Derive macro used to implement the `Salt` trait
+///
+/// If the user need to use multiple tasks of the same type,
+/// the `salt` attribute can be used to define a unique salt.
+///
+/// The salt attribute is a string that can contain placeholders
+/// for the fields of the struct. The placeholders must be in the
+/// form of `{self.field_name}`.
+///
+/// # Example
+/// ```rust,ignore
+/// #[derive(Salt)]
+/// #[salt(format = "Task {self.id} {self.name}")]
+/// struct Task {
+///    id: Arc<RwLock<u32>>,
+///    name: Arc<RwLock<String>>,
+///    ...
+/// }
+///
+/// struct SecondTask {
+///    id: Arc<RwLock<u32>>,
+///    ...
+/// }
+/// ```
+///
+/// In this example, the salt implementation will look like this:
+/// ```rust,ignore
+/// impl Salt for Task {
+///     fn salt(&self) -> String {
+///         format!("Task {} {}", &*self.id.read().unwrap(), &*self.name.read().unwrap())
+///     }
+/// }
+///
+/// impl Salt for SecondTask {}
+/// ```
 #[proc_macro_derive(Salt, attributes(salt))]
 pub fn derive_salt(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);

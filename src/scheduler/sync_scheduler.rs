@@ -263,6 +263,12 @@ impl TaskScheduler for Scheduler {
         std::thread::spawn(move || task.run());
     }
 
+    /// Collect the title of all tasks in the scheduler.
+    ///
+    /// # Example
+    /// ```rust,ignore
+    /// let titles = scheduler.get();
+    /// ```
     fn get(&self) -> Vec<String> {
         self.read()
             .unwrap()

@@ -264,6 +264,12 @@ impl TaskScheduler for Scheduler {
         tokio::spawn(async move { task.run().await });
     }
 
+    /// Collect the title of all tasks in the scheduler.
+    ///
+    /// # Example
+    /// ```rust,ignore
+    /// let titles = scheduler.get();
+    /// ```
     fn get(&self) -> Vec<String> {
         self.read()
             .unwrap()
