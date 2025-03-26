@@ -3,7 +3,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use chrono::{NaiveDateTime, TimeDelta};
+use chrono::NaiveDateTime;
 
 use crate::{
     recurrence::Recurrence,
