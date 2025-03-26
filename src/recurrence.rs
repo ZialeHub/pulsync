@@ -20,7 +20,7 @@ use chrono::NaiveDateTime;
 /// // Execute the task every 1 minute and 2 seconds
 /// let recurrence = every(1.minutes()).and(2.seconds());
 /// ```
-#[derive(Hash, Clone, Copy)]
+#[derive(Debug, Hash, Clone, Copy)]
 pub struct Recurrence {
     pub(crate) unit: RecurrenceUnit,
     pub(crate) run_after: bool,
@@ -117,7 +117,7 @@ pub fn every(unit: RecurrenceUnit) -> Recurrence {
 /// RecurrenceUnit is a wrapper around u64 to represent the time interval between each execution of a task.
 ///
 /// It implements the Into trait to convert the RecurrenceUnit into a Duration used to wait for the next execution of the task.
-#[derive(Hash, Clone, Copy)]
+#[derive(Debug, Hash, Clone, Copy)]
 pub struct RecurrenceUnit(u64);
 
 impl std::ops::Deref for RecurrenceUnit {
