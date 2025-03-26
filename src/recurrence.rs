@@ -21,6 +21,7 @@ use chrono::NaiveDateTime;
 /// let recurrence = every(1.minutes()).and(2.seconds());
 /// ```
 #[derive(Debug, Hash, Clone, Copy)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Recurrence {
     pub(crate) unit: RecurrenceUnit,
     pub(crate) run_after: bool,
@@ -118,6 +119,7 @@ pub fn every(unit: RecurrenceUnit) -> Recurrence {
 ///
 /// It implements the Into trait to convert the RecurrenceUnit into a Duration used to wait for the next execution of the task.
 #[derive(Debug, Hash, Clone, Copy)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct RecurrenceUnit(u64);
 
 impl std::ops::Deref for RecurrenceUnit {

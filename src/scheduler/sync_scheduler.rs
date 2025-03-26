@@ -117,7 +117,7 @@ fn run_after_handler(
 impl TaskScheduler for Scheduler {
     /// Create a new Asynchronous Scheduler.
     fn build() -> Self {
-        Arc::new(RwLock::new(HashMap::<TaskId, SyncTask>::new()))
+        Scheduler(Arc::new(RwLock::new(HashMap::<TaskId, SyncTask>::new())))
     }
 
     /// Add a task to the scheduler.

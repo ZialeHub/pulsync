@@ -3,7 +3,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use chrono::NaiveDateTime;
+use chrono::{NaiveDateTime, TimeDelta};
 
 use crate::{
     recurrence::Recurrence,
@@ -117,7 +117,7 @@ fn run_after_handler(
 impl TaskScheduler for Scheduler {
     /// Create a new Asynchronous Scheduler.
     fn build() -> Self {
-        Arc::new(RwLock::new(HashMap::<TaskId, AsyncTask>::new()))
+        Scheduler(Arc::new(RwLock::new(HashMap::<TaskId, AsyncTask>::new())))
     }
 
     /// Add a task to the scheduler.
@@ -142,6 +142,14 @@ impl TaskScheduler for Scheduler {
             return None;
         }
         let status = Arc::new(RwLock::new(TaskStatus::Running));
+        let mut next_run = chrono::Utc::now().naive_utc();
+        if recurrence.run_after {
+            if let Some(delta) = TimeDelta::new(*recurrence.unit as i64, 0) {
+                if let Some(next) = next_run.checked_add_signed(delta) {
+                    next_run = next;
+                }
+            }
+        }
         let recurrence = Arc::new(RwLock::new(recurrence));
         let title = Arc::new(task.title());
         let created_at = chrono::Utc::now().naive_utc();
@@ -157,6 +165,7 @@ impl TaskScheduler for Scheduler {
         let task = AsyncTask {
             id,
             created_at,
+            next_run,
             title,
             status,
             handler,

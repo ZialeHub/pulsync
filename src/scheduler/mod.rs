@@ -20,9 +20,67 @@ mod sync_scheduler;
 /// The key is the unique identifier of the task and the value is the task itself.
 /// Tasks can either be synchronous or asynchronous.
 #[cfg(feature = "sync")]
-pub type Scheduler = Arc<RwLock<HashMap<TaskId, SyncTask>>>;
+pub struct Scheduler(Arc<RwLock<HashMap<TaskId, SyncTask>>>);
 #[cfg(feature = "async")]
-pub type Scheduler = Arc<RwLock<HashMap<TaskId, AsyncTask>>>;
+pub struct Scheduler(Arc<RwLock<HashMap<TaskId, AsyncTask>>>);
+
+#[cfg(feature = "sync")]
+impl std::ops::Deref for Scheduler {
+    type Target = Arc<RwLock<HashMap<TaskId, SyncTask>>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+#[cfg(feature = "async")]
+impl std::ops::Deref for Scheduler {
+    type Target = Arc<RwLock<HashMap<TaskId, AsyncTask>>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+#[cfg(feature = "sync")]
+impl std::ops::DerefMut for Scheduler {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+#[cfg(feature = "async")]
+impl std::ops::DerefMut for Scheduler {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+#[cfg(feature = "serde")]
+impl serde::Serialize for Scheduler {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        #[derive(serde::Serialize)]
+        struct SerializedScheduler {
+            pub saved_at: chrono::NaiveDateTime,
+            pub tasks: Vec<(String, Recurrence)>,
+        }
+
+        let tasks: Vec<(String, Recurrence)> = self
+            .read()
+            .unwrap()
+            .values()
+            .map(|task| (String::new(), task.recurrence.read().unwrap().clone()))
+            .collect();
+        SerializedScheduler {
+            saved_at: chrono::Local::now().naive_local(),
+            tasks,
+        }
+        .serialize(serializer)
+    }
+}
 
 /// A trait to implement on a scheduler.
 ///
