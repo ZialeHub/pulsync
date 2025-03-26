@@ -56,32 +56,6 @@ impl std::ops::DerefMut for Scheduler {
     }
 }
 
-#[cfg(feature = "serde")]
-impl serde::Serialize for Scheduler {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        #[derive(serde::Serialize)]
-        struct SerializedScheduler {
-            pub saved_at: chrono::NaiveDateTime,
-            pub tasks: Vec<(String, Recurrence)>,
-        }
-
-        let tasks: Vec<(String, Recurrence)> = self
-            .read()
-            .unwrap()
-            .values()
-            .map(|task| (String::new(), task.recurrence.read().unwrap().clone()))
-            .collect();
-        SerializedScheduler {
-            saved_at: chrono::Local::now().naive_local(),
-            tasks,
-        }
-        .serialize(serializer)
-    }
-}
-
 /// A trait to implement on a scheduler.
 ///
 /// Used to schedule, reschedule, pause, resume, and abort tasks.

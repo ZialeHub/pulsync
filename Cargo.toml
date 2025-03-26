@@ -16,7 +16,7 @@ serde = { version = "1.0.217", default-features = false, features = ["derive"], 
 serde_json = { version = "1.0.138", optional = true }
 
 [features]
-default = ["async", "serde"]
+default = ["async"]
 async = ["dep:tokio"]
 sync = []
 serde = ["dep:serde", "dep:serde_json"]

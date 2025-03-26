@@ -369,9 +369,6 @@ mod test {
                     *state += 1;
                 })
             }
-            fn save(&self, _id: TaskId) -> Pin<Box<dyn Future<Output = ()> + Send + '_ + Sync>> {
-                Box::pin(async move {})
-            }
         }
 
         // Run the task once
@@ -431,9 +428,6 @@ mod test {
                     *state += 1;
                 })
             }
-            fn save(&self, _id: TaskId) -> Pin<Box<dyn Future<Output = ()> + Send + '_ + Sync>> {
-                Box::pin(async move {})
-            }
         }
 
         // Run the task every 3 seconds after timer
@@ -473,9 +467,6 @@ mod test {
                     *state += 1;
                 })
             }
-            fn save(&self, _id: TaskId) -> Pin<Box<dyn Future<Output = ()> + Send + '_ + Sync>> {
-                Box::pin(async move {})
-            }
         }
 
         // Run the task once
@@ -514,9 +505,6 @@ mod test {
                     );
                     *state += 1;
                 })
-            }
-            fn save(&self, _id: TaskId) -> Pin<Box<dyn Future<Output = ()> + Send + '_ + Sync>> {
-                Box::pin(async move {})
             }
         }
 
@@ -573,9 +561,6 @@ mod test {
                     *self.state.write().unwrap() += 1;
                 })
             }
-            fn save(&self, _id: TaskId) -> Pin<Box<dyn Future<Output = ()> + Send + '_ + Sync>> {
-                Box::pin(async move {})
-            }
         }
         #[derive(Debug, Clone, Task, Salt)]
         #[title("Second Task with login {self.login}")]
@@ -594,9 +579,6 @@ mod test {
                         self.age.read().unwrap()
                     );
                 })
-            }
-            fn save(&self, _id: TaskId) -> Pin<Box<dyn Future<Output = ()> + Send + '_ + Sync>> {
-                Box::pin(async move {})
             }
         }
         let id = scheduler
@@ -647,9 +629,6 @@ mod test {
                     *self.state.write().unwrap() += 1;
                 })
             }
-            fn save(&self, _id: TaskId) -> Pin<Box<dyn Future<Output = ()> + Send + '_ + Sync>> {
-                Box::pin(async move {})
-            }
         }
         let _id1 = scheduler
             .schedule(Box::new(task1), every(2.seconds()).until(10.seconds()))
@@ -692,9 +671,6 @@ mod test {
                     *self.state.write().unwrap() += 1;
                 })
             }
-            fn save(&self, _id: TaskId) -> Pin<Box<dyn Future<Output = ()> + Send + '_ + Sync>> {
-                Box::pin(async move {})
-            }
         }
         let mut ten_seconds_in_future = chrono::Utc::now().naive_utc();
         ten_seconds_in_future += chrono::Duration::seconds(10);
@@ -716,41 +692,6 @@ mod test {
         assert_eq!(scheduler.get().len(), 0);
         assert_eq!(*value1.read().unwrap(), 5);
         assert_eq!(*value2.read().unwrap(), 1);
-        Ok(())
-    }
-
-    #[cfg(feature = "serde")]
-    #[tokio::test]
-    async fn async_scheduler_serialize_deserialize_task() -> Result<(), ()> {
-        let serialized_task: Arc<RwLock<String>> = Arc::new(RwLock::new(String::new()));
-        // Async Task
-        let mut scheduler = Scheduler::build();
-        #[derive(Clone, Task, Salt)]
-        #[title("MyAsyncTask state=|{self.state}|")]
-        #[salt("MyAsyncTaskSALT")]
-        struct MyAsyncTask {
-            state: Arc<RwLock<u8>>,
-        }
-        let task = MyAsyncTask::new(0);
-        impl AsyncTaskHandler for MyAsyncTask {
-            fn run(&self) -> Pin<Box<dyn Future<Output = ()> + Send + '_ + Sync>> {
-                Box::pin(async move {
-                    let mut state = self.state.write().unwrap();
-                    *state += 1;
-                })
-            }
-            fn save(&self, _id: TaskId) -> Pin<Box<dyn Future<Output = ()> + Send + '_ + Sync>> {
-                Box::pin(async move {
-                    serialized_task.write() = String::new();
-                })
-            }
-        }
-
-        let _id = scheduler
-            .schedule(Box::new(task.clone()), every(1.minutes()))
-            .unwrap();
-
-        assert!(false);
         Ok(())
     }
 }

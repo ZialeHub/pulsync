@@ -19,7 +19,6 @@ use super::TaskStatus;
 /// `save`: Method called after each run to let you save in database a copy of your state
 pub trait AsyncTaskHandler: Task + Send {
     fn run(&self) -> Pin<Box<dyn Future<Output = ()> + Send + '_ + Sync>>;
-    fn save(&self, id: TaskId) -> Pin<Box<dyn Future<Output = ()> + Send + '_ + Sync>>;
 }
 
 /// Represents an asynchronous task, scheduled in the scheduler.
@@ -34,7 +33,6 @@ pub trait AsyncTaskHandler: Task + Send {
 pub struct AsyncTask {
     pub(crate) id: TaskId,
     pub(crate) created_at: NaiveDateTime,
-    pub(crate) next_run: NaiveDateTime,
     pub(crate) status: Arc<RwLock<TaskStatus>>,
     pub(crate) title: Arc<String>,
     pub(crate) handler: tokio::task::JoinHandle<()>,
