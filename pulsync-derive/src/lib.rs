@@ -10,7 +10,7 @@ use syn::{
 /// Implementation for a Task to run with the scheduler
 ///
 /// The derive will generate a `new` method to create a task,
-/// and wrap each fields inside Arc<RwLock<>>.
+/// and wrap each fields inside TaskState<T>.
 ///
 /// The `title` attribute, allow the user to choose a unique title.
 ///
@@ -19,13 +19,13 @@ use syn::{
 /// #[derive(Task)]
 /// #[title(format = "Task {self.id} {self.name}")]
 /// struct Task {
-///   id: Arc<RwLock<u32>>,
-///   name: Arc<RwLock<String>>,
+///   id: TaskState<u32>,
+///   name: TaskState<String>,
 ///   ...
 /// }
 ///
 /// struct SecondTask {
-///  id: Arc<RwLock<u32>>,
+///  id: TaskState<u32>,
 ///  ...
 /// }
 /// ```
@@ -35,8 +35,8 @@ use syn::{
 /// impl Task {
 ///     pub fn new(id: u32, name: String) -> Self {
 ///         Self {
-///             id: Arc::new(RwLock::new(id)),
-///             name: Arc::new(RwLock::new(name)),
+///             id: TaskState::new(id),
+///             name: TaskState::new(name),
 ///         }
 ///     }
 /// }
@@ -50,7 +50,7 @@ use syn::{
 /// impl SecondTask {
 ///     pub fn new(id: u32) -> Self {
 ///         Self {
-///             id: Arc::new(RwLock::new(id)),
+///             id: TaskState::new(id),
 ///         }
 ///     }
 /// }
@@ -83,7 +83,7 @@ fn impl_task_derive(ast: &DeriveInput) -> TokenStream {
         }
         .into();
     };
-    // Verify that each fields are Arc<RwLock<>> type
+    // Verify that each fields are TaskState<T> type
     // and collect the field names and types
     let arc_lock_fields: Vec<(Ident, Type)> = match get_fields_name_and_type(named) {
         Ok(arc_lock_fields) => arc_lock_fields,
@@ -136,7 +136,7 @@ fn impl_task_derive(ast: &DeriveInput) -> TokenStream {
             pub fn new(#(#field_names: #field_types),*) -> Self {
                 Self {
                     #(
-                        #field_names: std::sync::Arc::new(std::sync::RwLock::new(#field_names))
+                        #field_names: TaskState::new(#field_names)
                     ),*
                 }
             }
@@ -170,33 +170,9 @@ fn get_fields_name_and_type(
             }
             .into());
         };
-        if segment.ident != "Arc" {
+        if segment.ident != "TaskState" {
             return Err(quote::quote! {
-                compile_error!("State fields must be Arc<RwLock<T>>");
-            }
-            .into());
-        }
-        let syn::PathArguments::AngleBracketed(args) = &segment.arguments else {
-            return Err(quote::quote! {
-                compile_error!("No angle bracketed arguments found");
-            }
-            .into());
-        };
-        let Some(syn::GenericArgument::Type(syn::Type::Path(type_path))) = args.args.first() else {
-            return Err(quote::quote! {
-                compile_error!("No type path found");
-            }
-            .into());
-        };
-        let Some(segment) = &type_path.path.segments.first() else {
-            return Err(quote::quote! {
-                compile_error!("No segments found");
-            }
-            .into());
-        };
-        if segment.ident != "RwLock" {
-            return Err(quote::quote! {
-                compile_error!("State fields must be Arc<RwLock<T>>");
+                compile_error!("State fields must be TaskState<T>");
             }
             .into());
         }
@@ -295,13 +271,13 @@ impl Parse for FormatedString {
 /// #[derive(Salt)]
 /// #[salt(format = "Task {self.id} {self.name}")]
 /// struct Task {
-///    id: Arc<RwLock<u32>>,
-///    name: Arc<RwLock<String>>,
+///    id: TaskState<u32>,
+///    name: TaskState<String>,
 ///    ...
 /// }
 ///
 /// struct SecondTask {
-///    id: Arc<RwLock<u32>>,
+///    id: TaskState<u32>,
 ///    ...
 /// }
 /// ```

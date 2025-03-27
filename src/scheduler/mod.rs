@@ -83,3 +83,66 @@ pub trait TaskScheduler {
     fn run(&self, task: impl AsyncTaskHandler);
     fn get(&self) -> Vec<String>;
 }
+
+#[cfg(feature = "serde")]
+pub trait Restart
+where
+    Self: Sized,
+{
+    #[cfg(feature = "sync")]
+    fn restart(
+        tasks: Vec<(Box<dyn SyncTaskHandler + Send + Sync + 'static>, Recurrence)>,
+    ) -> (Self, Vec<Option<TaskId>>);
+    #[cfg(feature = "async")]
+    fn restart(
+        tasks: Vec<(
+            Box<dyn AsyncTaskHandler + Send + Sync + 'static>,
+            Recurrence,
+        )>,
+    ) -> (Self, Vec<Option<TaskId>>);
+}
+
+#[cfg(feature = "serde")]
+impl Restart for Scheduler {
+    #[cfg(feature = "sync")]
+    fn restart(
+        tasks: Vec<(Box<dyn SyncTaskHandler + Send + Sync + 'static>, Recurrence)>,
+    ) -> (Self, Vec<Option<TaskId>>) {
+        let mut scheduler = Self::build();
+        let mut task_ids = Vec::new();
+        for (task, recurrence) in tasks.into_iter() {
+            let new_id = scheduler.schedule(task, recurrence);
+            task_ids.push(new_id);
+        }
+        (scheduler, task_ids)
+    }
+    #[cfg(feature = "async")]
+    fn restart(
+        tasks: Vec<(
+            Box<dyn AsyncTaskHandler + Send + Sync + 'static>,
+            Recurrence,
+        )>,
+    ) -> (Self, Vec<Option<TaskId>>) {
+        let mut scheduler = Self::build();
+        let mut task_ids = Vec::new();
+        for (task, recurrence) in tasks.into_iter() {
+            let new_id = scheduler.schedule(task, recurrence);
+            task_ids.push(new_id);
+        }
+        (scheduler, task_ids)
+    }
+}
+
+#[cfg(feature = "sync")]
+impl<T: SyncTaskHandler + Send + Sync> From<T> for Box<dyn SyncTaskHandler + Send + Sync> {
+    fn from(value: T) -> Self {
+        Box::new(value) as Box<dyn SyncTaskHandler + Send + Sync>
+    }
+}
+
+#[cfg(feature = "async")]
+impl<T: AsyncTaskHandler + Send + Sync> From<T> for Box<dyn AsyncTaskHandler + Send + Sync> {
+    fn from(value: T) -> Self {
+        Box::new(value) as Box<dyn AsyncTaskHandler + Send + Sync>
+    }
+}

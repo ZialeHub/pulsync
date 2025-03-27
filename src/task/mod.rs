@@ -1,4 +1,7 @@
-use std::hash::{DefaultHasher, Hash, Hasher};
+use std::{
+    hash::{DefaultHasher, Hash, Hasher},
+    sync::{Arc, RwLock},
+};
 
 use crate::recurrence::Recurrence;
 
@@ -50,5 +53,48 @@ where
 pub trait Salt {
     fn salt(&self) -> String {
         String::new()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct TaskState<T>(Arc<RwLock<T>>);
+impl<T> TaskState<T> {
+    pub fn new(data: T) -> Self {
+        Self(Arc::new(RwLock::new(data)))
+    }
+}
+
+impl<T> std::ops::Deref for TaskState<T> {
+    type Target = Arc<RwLock<T>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<T> std::ops::DerefMut for TaskState<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<T: Clone + serde::Serialize> serde::Serialize for TaskState<T> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        (*self.read().unwrap()).clone().serialize(serializer)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de, T: Clone + serde::Deserialize<'de>> serde::Deserialize<'de> for TaskState<T> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let data = T::deserialize(deserializer)?;
+        Ok(TaskState(Arc::new(RwLock::new(data))))
     }
 }
