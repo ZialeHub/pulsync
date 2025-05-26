@@ -1,0 +1,26 @@
+[package]
+name = "pulsync"
+version = "1.0.0"
+edition = "2021"
+authors = ["Ziale"]
+repository = "https://github.com/ZialeHub/pulsync"
+homepage = "https://github.com/ZialeHub/pulsync"
+license-file = "LICENSE"
+description = "Schedule Async and Sync Task with ease."
+keywords = ["pulsync", "sync", "async", "scheduler", "task"]
+readme = "README.md"
+
+[dependencies]
+tracing = { version = "0.1.41", default-features = false }
+chrono = { version = "0.4.41", default-features = false, features = ["serde", "now", "clock"] }
+tokio = { version = "1.45.1", default-features = false, features = ["rt", "time", "macros", "rt-multi-thread"], optional = true }
+pulsync-derive = { version = "0.1.0" }
+serde = { version = "1.0.219", default-features = false, features = ["derive"], optional = true }
+serde_json = { version = "1.0.140", optional = true }
+thiserror = { version = "2.0.12", default-features = false }
+
+[features]
+default = ["async"]
+async = ["dep:tokio"]
+sync = []
+serde = ["dep:serde", "dep:serde_json"]
