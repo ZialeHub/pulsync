@@ -1,10 +1,7 @@
 #[cfg(feature = "sync")]
 #[cfg(test)]
 mod test {
-    use std::{
-        sync::{Arc, RwLock},
-        time::Duration,
-    };
+    use std::time::Duration;
 
     use pulsync::prelude::*;
     use pulsync_derive::{Salt, Task};
@@ -17,7 +14,7 @@ mod test {
         #[title("MySyncTask state=|{self.state}|")]
         #[salt("MySyncTaskSALT")]
         struct MySyncTask {
-            state: Arc<RwLock<u8>>,
+            state: TaskState<u8>,
         }
         let task = MySyncTask::new(0);
         impl SyncTaskHandler for MySyncTask {
@@ -37,7 +34,7 @@ mod test {
             .schedule(Box::new(task.clone()), every(1.seconds()))
             .unwrap();
         std::thread::sleep(Duration::from_secs(5));
-        scheduler.abort(id);
+        let _ = scheduler.abort(id);
         eprintln!("State = {:?}", *task.state.read().unwrap());
         assert_eq!(*task.state.read().unwrap(), 6);
         // Run the task every 3 seconds, 3 times
@@ -45,7 +42,7 @@ mod test {
             .schedule(Box::new(task.clone()), every(3.seconds()).count(3))
             .unwrap();
         std::thread::sleep(Duration::from_secs(10));
-        scheduler.abort(id);
+        let _ = scheduler.abort(id);
         eprintln!("State = {:?}", *task.state.read().unwrap());
         assert_eq!(*task.state.read().unwrap(), 9);
         // Run the task every 1 minute and 2 seconds
@@ -56,11 +53,11 @@ mod test {
             )
             .unwrap();
         std::thread::sleep(Duration::from_secs(120));
-        scheduler.pause(id);
-        scheduler.resume(id);
-        scheduler.abort(id);
-        scheduler.pause(id);
-        scheduler.resume(id);
+        let _ = scheduler.pause(id);
+        let _ = scheduler.resume(id);
+        let _ = scheduler.abort(id);
+        let _ = scheduler.pause(id);
+        let _ = scheduler.resume(id);
         eprintln!("State = {:?}", *task.state.read().unwrap());
         assert_eq!(*task.state.read().unwrap(), 10);
         Ok(())
@@ -74,7 +71,7 @@ mod test {
         #[title("MySyncTask state=|{self.state}|")]
         #[salt("MySyncTaskSALT")]
         struct MySyncTask {
-            state: Arc<RwLock<u8>>,
+            state: TaskState<u8>,
         }
         let task = MySyncTask::new(0);
         impl SyncTaskHandler for MySyncTask {
@@ -89,7 +86,7 @@ mod test {
             .schedule(Box::new(task.clone()), every(3.seconds()).run_after(true))
             .unwrap();
         std::thread::sleep(Duration::from_secs(9));
-        scheduler.abort(id);
+        let _ = scheduler.abort(id);
         eprintln!("State = {:?}", *task.state.read().unwrap());
         assert_eq!(*task.state.read().unwrap(), 2);
 
@@ -98,7 +95,7 @@ mod test {
             .schedule(Box::new(task.clone()), every(3.seconds()))
             .unwrap();
         std::thread::sleep(Duration::from_secs(9));
-        scheduler.abort(id);
+        let _ = scheduler.abort(id);
         eprintln!("State = {:?}", *task.state.read().unwrap());
         assert_eq!(*task.state.read().unwrap(), 5);
         Ok(())
@@ -111,8 +108,8 @@ mod test {
         #[derive(Debug, Clone, Task, Salt)]
         #[salt("{self.login}")]
         struct MySyncTask {
-            login: Arc<RwLock<String>>,
-            state: Arc<RwLock<u8>>,
+            login: TaskState<String>,
+            state: TaskState<u8>,
         }
         impl SyncTaskHandler for MySyncTask {
             fn run(&self) {
@@ -126,17 +123,17 @@ mod test {
             }
         }
 
-        let state = Arc::new(RwLock::new(0));
+        let state = TaskState::new(0);
         let task = MySyncTask {
-            login: Arc::new(RwLock::new(String::from("pierre"))),
+            login: TaskState::new(String::from("pierre")),
             state: state.clone(),
         };
         let task2 = MySyncTask {
-            login: Arc::new(RwLock::new(String::from("jean"))),
+            login: TaskState::new(String::from("jean")),
             state: state.clone(),
         };
         let task3 = MySyncTask {
-            login: Arc::new(RwLock::new(String::from("lucie"))),
+            login: TaskState::new(String::from("lucie")),
             state: state.clone(),
         };
         // Run the task once
@@ -155,9 +152,9 @@ mod test {
             .schedule(Box::new(task3.clone()), every(5.seconds()))
             .unwrap();
         std::thread::sleep(Duration::from_secs(15));
-        scheduler.abort(id1);
-        scheduler.abort(id2);
-        scheduler.abort(id3);
+        let _ = scheduler.abort(id1);
+        let _ = scheduler.abort(id2);
+        let _ = scheduler.abort(id3);
         eprintln!("State = {:?}", *state.read().unwrap());
         assert_eq!(*state.read().unwrap(), 10);
         Ok(())
@@ -170,7 +167,7 @@ mod test {
         #[derive(Clone, Task, Salt)]
         #[salt("MySyncTaskSALT")]
         struct MySyncTask {
-            state: Arc<RwLock<u8>>,
+            state: TaskState<u8>,
         }
         let task = MySyncTask::new(0);
         impl SyncTaskHandler for MySyncTask {
@@ -189,7 +186,7 @@ mod test {
         assert_eq!(*task.state.read().unwrap(), 3);
         let _new_id = scheduler.reschedule(id, every(5.seconds())).unwrap();
         std::thread::sleep(Duration::from_secs(10));
-        scheduler.abort(id);
+        let _ = scheduler.abort(id);
         eprintln!("State = {:?}", *task.state.read().unwrap());
         assert_eq!(*task.state.read().unwrap(), 5);
         Ok(())
@@ -202,7 +199,7 @@ mod test {
         #[title("First Task")]
         #[salt("MySyncTask: {self.state}")]
         struct MySyncTask {
-            state: Arc<RwLock<u8>>,
+            state: TaskState<u8>,
         }
         let task = MySyncTask::new(0);
         impl SyncTaskHandler for MySyncTask {
@@ -214,8 +211,8 @@ mod test {
         #[title("Second Task with login {self.login}")]
         #[salt("MySyncTask2: {self.login}")]
         struct MySyncTask2 {
-            login: Arc<RwLock<String>>,
-            age: Arc<RwLock<u32>>,
+            login: TaskState<String>,
+            age: TaskState<u32>,
         }
         let task2 = MySyncTask2::new(String::from("Pierre"), 25);
         impl SyncTaskHandler for MySyncTask2 {
@@ -237,12 +234,14 @@ mod test {
         assert_eq!(task_list.len(), 2);
         assert!(task_list
             .iter()
-            .find(|task| task.starts_with(&format!("[SyncTask({id})] First Task started at ")))
+            .find(|task| task
+                .label
+                .starts_with(&format!("[SyncTask][{id}] First Task [active]")))
             .is_some());
         assert!(task_list
             .iter()
-            .find(|task| task.starts_with(&format!(
-                "[SyncTask({id2})] Second Task with login Pierre started at "
+            .find(|task| task.label.starts_with(&format!(
+                "[SyncTask][{id2}] Second Task with login Pierre [active]"
             )))
             .is_some());
     }
@@ -254,13 +253,13 @@ mod test {
         #[title("MySyncTask for {self.login}")]
         #[salt("MySyncTask: {self.state}")]
         struct MySyncTask {
-            login: Arc<RwLock<String>>,
-            state: Arc<RwLock<u8>>,
+            login: TaskState<String>,
+            state: TaskState<u8>,
         }
-        let value1 = Arc::new(RwLock::new(0));
-        let login1 = Arc::new(RwLock::new(String::from("Jean")));
-        let value2 = Arc::new(RwLock::new(0));
-        let login2 = Arc::new(RwLock::new(String::from("Pierre")));
+        let value1 = TaskState::new(0);
+        let login1 = TaskState::new(String::from("Jean"));
+        let value2 = TaskState::new(0);
+        let login2 = TaskState::new(String::from("Pierre"));
         let task1 = MySyncTask {
             login: login1,
             state: value1.clone(),
@@ -294,13 +293,13 @@ mod test {
         #[title("MySyncTask for {self.login}")]
         #[salt("MySyncTask: {self.state}")]
         struct MySyncTask {
-            login: Arc<RwLock<String>>,
-            state: Arc<RwLock<u8>>,
+            login: TaskState<String>,
+            state: TaskState<u8>,
         }
-        let value1 = Arc::new(RwLock::new(0));
-        let login1 = Arc::new(RwLock::new(String::from("Jean")));
-        let value2 = Arc::new(RwLock::new(0));
-        let login2 = Arc::new(RwLock::new(String::from("Pierre")));
+        let value1 = TaskState::new(0);
+        let login1 = TaskState::new(String::from("Jean"));
+        let value2 = TaskState::new(0);
+        let login2 = TaskState::new(String::from("Pierre"));
         let task1 = MySyncTask {
             login: login1,
             state: value1.clone(),
@@ -341,12 +340,7 @@ mod test {
 #[cfg(feature = "async")]
 #[cfg(test)]
 mod test {
-    use std::{
-        future::Future,
-        pin::Pin,
-        sync::{Arc, RwLock},
-        time::Duration,
-    };
+    use std::{future::Future, pin::Pin, time::Duration};
 
     use pulsync::prelude::*;
     use pulsync_derive::{Salt, Task};
@@ -359,7 +353,7 @@ mod test {
         #[title("MyAsyncTask state=|{self.state}|")]
         #[salt("MyAsyncTaskSALT")]
         struct MyAsyncTask {
-            state: Arc<RwLock<u8>>,
+            state: TaskState<u8>,
         }
         let task = MyAsyncTask::new(0);
         impl AsyncTaskHandler for MyAsyncTask {
@@ -381,7 +375,7 @@ mod test {
             .schedule(Box::new(task.clone()), every(1.seconds()))
             .unwrap();
         tokio::time::sleep(Duration::from_secs(5)).await;
-        scheduler.abort(id);
+        let _ = scheduler.abort(id);
         eprintln!("State = {:?}", *task.state.read().unwrap());
         assert_eq!(*task.state.read().unwrap(), 6);
         // Run the task every 3 seconds, 3 times
@@ -389,7 +383,7 @@ mod test {
             .schedule(Box::new(task.clone()), every(3.seconds()).count(3))
             .unwrap();
         tokio::time::sleep(Duration::from_secs(10)).await;
-        scheduler.abort(id);
+        let _ = scheduler.abort(id);
         eprintln!("State = {:?}", *task.state.read().unwrap());
         assert_eq!(*task.state.read().unwrap(), 9);
         // Run the task every 1 minute and 2 seconds
@@ -400,11 +394,11 @@ mod test {
             )
             .unwrap();
         tokio::time::sleep(Duration::from_secs(120)).await;
-        scheduler.pause(id);
-        scheduler.resume(id);
-        scheduler.abort(id);
-        scheduler.pause(id);
-        scheduler.resume(id);
+        let _ = scheduler.pause(id);
+        let _ = scheduler.resume(id);
+        let _ = scheduler.abort(id);
+        let _ = scheduler.pause(id);
+        let _ = scheduler.resume(id);
         eprintln!("State = {:?}", *task.state.read().unwrap());
         assert_eq!(*task.state.read().unwrap(), 10);
         Ok(())
@@ -418,7 +412,7 @@ mod test {
         #[title("MyAsyncTask state=|{self.state}|")]
         #[salt("MyAsyncTaskSALT")]
         struct MyAsyncTask {
-            state: Arc<RwLock<u8>>,
+            state: TaskState<u8>,
         }
         let task = MyAsyncTask::new(0);
         impl AsyncTaskHandler for MyAsyncTask {
@@ -435,7 +429,7 @@ mod test {
             .schedule(Box::new(task.clone()), every(3.seconds()).run_after(true))
             .unwrap();
         tokio::time::sleep(Duration::from_secs(9)).await;
-        scheduler.abort(id);
+        let _ = scheduler.abort(id);
         eprintln!("State = {:?}", *task.state.read().unwrap());
         assert_eq!(*task.state.read().unwrap(), 2);
 
@@ -444,7 +438,7 @@ mod test {
             .schedule(Box::new(task.clone()), every(3.seconds()))
             .unwrap();
         tokio::time::sleep(Duration::from_secs(9)).await;
-        scheduler.abort(id);
+        let _ = scheduler.abort(id);
         eprintln!("State = {:?}", *task.state.read().unwrap());
         assert_eq!(*task.state.read().unwrap(), 5);
         Ok(())
@@ -457,7 +451,7 @@ mod test {
         #[derive(Clone, Task, Salt)]
         #[salt("MyAsyncTaskSALT")]
         struct MyAsyncTask {
-            state: Arc<RwLock<u8>>,
+            state: TaskState<u8>,
         }
         let task = MyAsyncTask::new(0);
         impl AsyncTaskHandler for MyAsyncTask {
@@ -478,7 +472,7 @@ mod test {
         assert_eq!(*task.state.read().unwrap(), 3);
         let _new_id = scheduler.reschedule(id, every(5.seconds())).unwrap();
         tokio::time::sleep(Duration::from_secs(10)).await;
-        scheduler.abort(id);
+        let _ = scheduler.abort(id);
         eprintln!("State = {:?}", *task.state.read().unwrap());
         assert_eq!(*task.state.read().unwrap(), 5);
         Ok(())
@@ -491,8 +485,8 @@ mod test {
         #[derive(Debug, Clone, Task, Salt)]
         #[salt("{self.login}")]
         struct MyAsyncTask {
-            login: Arc<RwLock<String>>,
-            state: Arc<RwLock<u8>>,
+            login: TaskState<String>,
+            state: TaskState<u8>,
         }
         impl AsyncTaskHandler for MyAsyncTask {
             fn run(&self) -> Pin<Box<dyn Future<Output = ()> + Send + '_ + Sync>> {
@@ -508,17 +502,17 @@ mod test {
             }
         }
 
-        let state = Arc::new(RwLock::new(0));
+        let state = TaskState::new(0);
         let task = MyAsyncTask {
-            login: Arc::new(RwLock::new(String::from("pierre"))),
+            login: TaskState::new(String::from("pierre")),
             state: state.clone(),
         };
         let task2 = MyAsyncTask {
-            login: Arc::new(RwLock::new(String::from("jean"))),
+            login: TaskState::new(String::from("jean")),
             state: state.clone(),
         };
         let task3 = MyAsyncTask {
-            login: Arc::new(RwLock::new(String::from("lucie"))),
+            login: TaskState::new(String::from("lucie")),
             state: state.clone(),
         };
         // Run the task once
@@ -537,9 +531,9 @@ mod test {
             .schedule(Box::new(task3.clone()), every(5.seconds()))
             .unwrap();
         tokio::time::sleep(Duration::from_secs(15)).await;
-        scheduler.abort(id1);
-        scheduler.abort(id2);
-        scheduler.abort(id3);
+        let _ = scheduler.abort(id1);
+        let _ = scheduler.abort(id2);
+        let _ = scheduler.abort(id3);
         eprintln!("State = {:?}", *state.read().unwrap());
         assert_eq!(*state.read().unwrap(), 10);
         Ok(())
@@ -552,7 +546,7 @@ mod test {
         #[title("First Task")]
         #[salt("MyAsyncTask: {self.state}")]
         struct MyAsyncTask {
-            state: Arc<RwLock<u8>>,
+            state: TaskState<u8>,
         }
         let task = MyAsyncTask::new(0);
         impl AsyncTaskHandler for MyAsyncTask {
@@ -566,8 +560,8 @@ mod test {
         #[title("Second Task with login {self.login}")]
         #[salt("MyAsyncTask2: {self.login}")]
         struct MyAsyncTask2 {
-            login: Arc<RwLock<String>>,
-            age: Arc<RwLock<u32>>,
+            login: TaskState<String>,
+            age: TaskState<u32>,
         }
         let task2 = MyAsyncTask2::new(String::from("Pierre"), 25);
         impl AsyncTaskHandler for MyAsyncTask2 {
@@ -591,12 +585,14 @@ mod test {
         assert_eq!(task_list.len(), 2);
         assert!(task_list
             .iter()
-            .find(|task| task.starts_with(&format!("[AsyncTask({id})] First Task started at ")))
+            .find(|task| task
+                .label
+                .starts_with(&format!("[AsyncTask][{id}] First Task [active]")))
             .is_some());
         assert!(task_list
             .iter()
-            .find(|task| task.starts_with(&format!(
-                "[AsyncTask({id2})] Second Task with login Pierre started at "
+            .find(|task| task.label.starts_with(&format!(
+                "[AsyncTask][{id2}] Second Task with login Pierre [active]"
             )))
             .is_some());
     }
@@ -608,13 +604,13 @@ mod test {
         #[title("MyAsyncTask for {self.login}")]
         #[salt("MyAsyncTask: {self.state}")]
         struct MyAsyncTask {
-            login: Arc<RwLock<String>>,
-            state: Arc<RwLock<u8>>,
+            login: TaskState<String>,
+            state: TaskState<u8>,
         }
-        let value1 = Arc::new(RwLock::new(0));
-        let login1 = Arc::new(RwLock::new(String::from("Jean")));
-        let value2 = Arc::new(RwLock::new(0));
-        let login2 = Arc::new(RwLock::new(String::from("Pierre")));
+        let value1 = TaskState::new(0);
+        let login1 = TaskState::new(String::from("Jean"));
+        let value2 = TaskState::new(0);
+        let login2 = TaskState::new(String::from("Pierre"));
         let task1 = MyAsyncTask {
             login: login1,
             state: value1.clone(),
@@ -650,13 +646,13 @@ mod test {
         #[title("MyAsyncTask for {self.login}")]
         #[salt("MyAsyncTask: {self.state}")]
         struct MyAsyncTask {
-            login: Arc<RwLock<String>>,
-            state: Arc<RwLock<u8>>,
+            login: TaskState<String>,
+            state: TaskState<u8>,
         }
-        let value1 = Arc::new(RwLock::new(0));
-        let login1 = Arc::new(RwLock::new(String::from("Jean")));
-        let value2 = Arc::new(RwLock::new(0));
-        let login2 = Arc::new(RwLock::new(String::from("Pierre")));
+        let value1 = TaskState::new(0);
+        let login1 = TaskState::new(String::from("Jean"));
+        let value2 = TaskState::new(0);
+        let login2 = TaskState::new(String::from("Pierre"));
         let task1 = MyAsyncTask {
             login: login1,
             state: value1.clone(),

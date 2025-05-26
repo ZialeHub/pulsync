@@ -10,10 +10,11 @@ keywords = ["pulsync", "sync", "async", "scheduler", "task"]
 [dependencies]
 tracing = { version = "0.1.27", default-features = false }
 chrono = { version = "0.4.40", default-features = false, features = ["serde", "now", "clock"] }
-tokio = { version = "1.42.0", default-features = false, features = ["rt", "time", "macros"], optional = true }
+tokio = { version = "1.42.0", default-features = false, features = ["rt", "time", "macros", "rt-multi-thread"], optional = true }
 pulsync-derive = { path = "pulsync-derive" }
 serde = { version = "1.0.217", default-features = false, features = ["derive"], optional = true }
 serde_json = { version = "1.0.138", optional = true }
+thiserror = { version = "2.0.12", default-features = false }
 
 [features]
 default = ["async"]

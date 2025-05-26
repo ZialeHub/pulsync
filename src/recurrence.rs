@@ -50,7 +50,8 @@ impl Recurrence {
         self
     }
 
-    /// Set if the task should be executed after the first interval
+    /// Set if the task should be executed at run,
+    /// or if it should be delayed by 1 recurrence timer.
     ///
     /// By default, the value is set to false
     pub fn run_after(mut self, value: bool) -> Self {

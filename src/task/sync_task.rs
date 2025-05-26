@@ -26,7 +26,7 @@ pub struct SyncTask {
     pub(crate) created_at: NaiveDateTime,
     pub(crate) status: Arc<RwLock<TaskStatus>>,
     pub(crate) title: Arc<String>,
-    pub(crate) _handler: std::thread::JoinHandle<()>,
+    pub(crate) _handle: std::thread::JoinHandle<()>,
     pub(crate) recurrence: Arc<RwLock<Recurrence>>,
 }
 
@@ -34,10 +34,10 @@ impl std::fmt::Display for SyncTask {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "[SyncTask({})] {} started at {}",
+            "[SyncTask][{}] {} [{}]",
             self.id,
             self.title,
-            self.created_at.date()
+            *self.status.read().unwrap()
         )
     }
 }

@@ -7,7 +7,11 @@ use std::{
 use crate::task::async_task::{AsyncTask, AsyncTaskHandler};
 #[cfg(feature = "sync")]
 use crate::task::sync_task::{SyncTask, SyncTaskHandler};
-use crate::{recurrence::Recurrence, task::TaskId};
+use crate::{
+    error::PulsyncError,
+    recurrence::Recurrence,
+    task::{TaskDetails, TaskId},
+};
 
 #[cfg(feature = "async")]
 mod async_scheduler;
@@ -66,71 +70,33 @@ pub trait TaskScheduler {
         &mut self,
         task: Box<dyn SyncTaskHandler + Send + Sync + 'static>,
         recurrence: Recurrence,
-    ) -> Option<TaskId>;
+    ) -> Result<TaskId, PulsyncError>;
     #[cfg(feature = "async")]
     fn schedule(
         &mut self,
         task: Box<dyn AsyncTaskHandler + Send + Sync + 'static>,
         recurrence: Recurrence,
-    ) -> Option<TaskId>;
-    fn reschedule(&mut self, id: TaskId, recurrence: Recurrence) -> Option<TaskId>;
-    fn pause(&mut self, id: TaskId);
-    fn resume(&mut self, id: TaskId);
-    fn abort(&mut self, id: TaskId);
+    ) -> Result<TaskId, PulsyncError>;
+    fn reschedule(&mut self, id: TaskId, recurrence: Recurrence) -> Result<TaskId, PulsyncError>;
+    fn pause(&mut self, id: TaskId) -> Result<(), PulsyncError>;
+    fn resume(&mut self, id: TaskId) -> Result<(), PulsyncError>;
+    fn abort(&mut self, id: TaskId) -> Result<(), PulsyncError>;
     #[cfg(feature = "sync")]
     fn run(&self, task: impl SyncTaskHandler);
     #[cfg(feature = "async")]
     fn run(&self, task: impl AsyncTaskHandler);
-    fn get(&self) -> Vec<String>;
-}
-
-#[cfg(feature = "serde")]
-pub trait Restart
-where
-    Self: Sized,
-{
-    #[cfg(feature = "sync")]
+    fn get(&self) -> Vec<TaskDetails>;
+    #[cfg(all(feature = "sync", feature = "serde"))]
     fn restart(
         tasks: Vec<(Box<dyn SyncTaskHandler + Send + Sync + 'static>, Recurrence)>,
     ) -> (Self, Vec<Option<TaskId>>);
-    #[cfg(feature = "async")]
+    #[cfg(all(feature = "async", feature = "serde"))]
     fn restart(
         tasks: Vec<(
             Box<dyn AsyncTaskHandler + Send + Sync + 'static>,
             Recurrence,
         )>,
     ) -> (Self, Vec<Option<TaskId>>);
-}
-
-#[cfg(feature = "serde")]
-impl Restart for Scheduler {
-    #[cfg(feature = "sync")]
-    fn restart(
-        tasks: Vec<(Box<dyn SyncTaskHandler + Send + Sync + 'static>, Recurrence)>,
-    ) -> (Self, Vec<Option<TaskId>>) {
-        let mut scheduler = Self::build();
-        let mut task_ids = Vec::new();
-        for (task, recurrence) in tasks.into_iter() {
-            let new_id = scheduler.schedule(task, recurrence);
-            task_ids.push(new_id);
-        }
-        (scheduler, task_ids)
-    }
-    #[cfg(feature = "async")]
-    fn restart(
-        tasks: Vec<(
-            Box<dyn AsyncTaskHandler + Send + Sync + 'static>,
-            Recurrence,
-        )>,
-    ) -> (Self, Vec<Option<TaskId>>) {
-        let mut scheduler = Self::build();
-        let mut task_ids = Vec::new();
-        for (task, recurrence) in tasks.into_iter() {
-            let new_id = scheduler.schedule(task, recurrence);
-            task_ids.push(new_id);
-        }
-        (scheduler, task_ids)
-    }
 }
 
 #[cfg(feature = "sync")]

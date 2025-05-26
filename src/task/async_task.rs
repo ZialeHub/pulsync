@@ -35,7 +35,7 @@ pub struct AsyncTask {
     pub(crate) created_at: NaiveDateTime,
     pub(crate) status: Arc<RwLock<TaskStatus>>,
     pub(crate) title: Arc<String>,
-    pub(crate) handler: tokio::task::JoinHandle<()>,
+    pub(crate) handle: tokio::task::JoinHandle<()>,
     pub(crate) recurrence: Arc<RwLock<Recurrence>>,
 }
 
@@ -43,10 +43,10 @@ impl std::fmt::Display for AsyncTask {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "[AsyncTask({})] {} started at {}",
+            "[AsyncTask][{}] {} [{}]",
             self.id,
             self.title,
-            self.created_at.date()
+            *self.status.read().unwrap()
         )
     }
 }

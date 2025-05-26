@@ -13,7 +13,8 @@ A Rust crate for managing synchronous and asynchronous task scheduling with powe
 - Feature flags:
   - `sync`: Enables synchronous task scheduling.
   - `async`: Enables asynchronous task scheduling.
-  - **Note:** You must enable exactly one of these features; they cannot be used together.
+  - **Note:** You must enable exactly one of the features above; they cannot be used together.
+  - `serde`: Enables de/serialize `TaskState<T>` and add a `restart` method to scheduler.
 
 ## Installation
 
@@ -31,77 +32,91 @@ pulsync = { version = "0.1", default-features = false, features = ["sync"] }
 ### Synchronous Example
 
 ```rust,ignore
+use chrono::NaiveDateTime;
 use pulsync::prelude::*;
-use tokio::main;
 
 #[derive(Debug, Clone, Task, Salt)]
 #[title("MySyncTask for {self.login}")]
 #[salt("{self.state}")]
 struct MySyncTask {
-    login: Arc<RwLock<String>>,
-    state: Arc<RwLock<u8>>,
+    login: TaskState<String>,
+    state: TaskState<u8>,
 }
 impl SyncTaskHandler for MySyncTask {
     fn run(&self) {
-        eprintln!("Number of message sent to {} = {}", self.login.read().unwrap(), self.state.read().unwrap());
-        ...
+        eprintln!(
+            "Number of messages sent to {} = {}",
+            self.login.read().unwrap(),
+            self.state.read().unwrap()
+        );
         *self.state.write().unwrap() += 1;
     }
 }
 
-#[main]
-async fn main() {
+fn main() {
     let mut scheduler = Scheduler::build();
-    let task = MySyncTask::new("Pierre", 0);
+    let task = MySyncTask::new(String::from("Pierre"), 0);
 
     // The task will run every 3 days until 2026-01-01 00:00:00
-    let id = scheduler.schedule(
-        Box::new(task),
-        every(3.days()).until_datetime(NaiveDateTime::parse_from_str("2026-01-01 00:00:00", "%Y-%m-%d %H:%M:%S").unwrap()),
-    ).unwrap();
+    let _id = scheduler
+        .schedule(
+            Box::new(task),
+            every(3.days()).until_datetime(
+                NaiveDateTime::parse_from_str("2026-01-01 00:00:00", "%Y-%m-%d %H:%M:%S").unwrap(),
+            ),
+        )
+        .unwrap();
 
     // titles = ["[SyncTask({id})] MySyncTask for Pierre started at {task start datetime}"]
-    let titles = scheduler.get();
+    let _titles = scheduler.get();
 }
+
 ```
 
 ### Asynchronous Example
 
 ```rust,ignore
+#![cfg(all(feature = "async", not(feature = "sync")))]
+use std::{future::Future, pin::Pin};
+
 use pulsync::prelude::*;
-use tokio::main;
 
 #[derive(Debug, Clone, Task, Salt)]
 #[title("MyAsyncTask for {self.login}")]
 #[salt("{self.state}")]
 struct MyAsyncTask {
-    login: Arc<RwLock<String>>,
-    state: Arc<RwLock<u8>>,
+    login: TaskState<String>,
+    state: TaskState<u8>,
 }
 impl AsyncTaskHandler for MyAsyncTask {
     fn run(&self) -> Pin<Box<dyn Future<Output = ()> + Send + '_ + Sync>> {
         Box::pin(async move {
-            eprintln!("Number of message sent to {} = {}", self.login.read().unwrap(), self.state.read().unwrap());
-            ...
+            eprintln!(
+                "Number of messages sent to {} = {}",
+                self.login.read().unwrap(),
+                self.state.read().unwrap()
+            );
             *self.state.write().unwrap() += 1;
         })
     }
 }
 
-#[main]
+#[tokio::main]
 async fn main() {
     let mut scheduler = Scheduler::build();
-    let task = MyAsyncTask::new("Pierre", 0);
+    let task = MyAsyncTask::new(String::from("Pierre"), 0);
 
     // The task will run every 5 minutes and 30 seconds
     // After 5 times the task will be removed from the scheduler.
-    let id = scheduler.schedule(
-        Box::new(task),
-        every(5.minutes()).and(30.seconds()).count(5),
-    ).unwrap();
-    scheduler.pause(id);
-    scheduler.resume(id);
-    scheduler.abort(id);
+    let id = scheduler
+        .schedule(
+            Box::new(task),
+            every(5.minutes()).and(30.seconds()).count(5),
+        )
+        .unwrap();
+    let _ = scheduler.pause(id);
+    let _ = scheduler.resume(id);
+    let _ = scheduler.abort(id);
 }
 ```
 

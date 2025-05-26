@@ -3,6 +3,8 @@ use std::{
     sync::{Arc, RwLock},
 };
 
+use chrono::NaiveDateTime;
+
 use crate::recurrence::Recurrence;
 
 #[cfg(feature = "async")]
@@ -13,12 +15,38 @@ pub mod sync_task;
 /// Type alias for the unique identifier of a task.
 pub type TaskId = u64;
 
-#[derive(Clone, Copy, PartialEq, Default)]
-pub(super) enum TaskStatus {
+/// Type alias for the label returned from scheduled tasks.
+pub type TaskLabel = String;
+
+/// Struct used to return scheduled tasks details from a scheduler
+#[derive(Debug, Clone)]
+pub struct TaskDetails {
+    pub id: TaskId,
+    pub label: TaskLabel,
+    pub recurrence: Arc<RwLock<Recurrence>>,
+    pub status: TaskStatus,
+    pub created_at: NaiveDateTime,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub enum TaskStatus {
     Paused,
     #[default]
     Running,
     Abort,
+}
+impl std::fmt::Display for TaskStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::Paused => "inactive",
+                Self::Abort => "canceled",
+                Self::Running => "active",
+            }
+        )
+    }
 }
 
 /// Trait to represent a task.
