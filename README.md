@@ -128,6 +128,11 @@ This project is licensed under the MIT License. See [LICENSE](./LICENSE) for det
 
 Contributions are welcome! Feel free to open issues or submit pull requests.
 
+## Links
+
+- **[crates.io](https://crates.io/crates/pulsync)**
+- **[Github](https://github.com/ZialeHub/pulsync)**
+
 ---
 
 Let me know if you want more details, usage examples, or specific documentation!
